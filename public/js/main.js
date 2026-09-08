@@ -3,7 +3,8 @@ import { copyShareLink, toggleFullscreen, recalculateLayout, applyDynamicMirrorE
 import { 
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
     toggleScreenShare, cleanupTileTrack, cleanupAllTilesForParticipant, 
-    terminateSession, handleIncomingDataPacket, checkMassMuteRules, ensureParticipantTile 
+    terminateSession, handleIncomingDataPacket, checkMassMuteRules, ensureParticipantTile,
+    broadcastCodecPreference, evaluateAndNegotiateCodec
 } from './livekit-handler.js';
 
 window.initiateCall = initiateCall;
@@ -103,20 +104,27 @@ async function initiateCall() {
 
         joinBtn.innerText = "Opening Camera...";
 
-        // Standard WebRTC Noise Suppression & Echo Cancellation Constraints
         const audioConstraints = {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true
         };
 
-        // Codec changed to 'vp8' for universal Firefox simulcast decoding compatibility
+        // Determine client preference: Firefox requires VP8 for grids, while Mobile & Chromium use H.264
+        const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+        AppState.localPreferredCodec = isFirefox ? 'vp8' : 'h264';
+        AppState.currentPublishedCodec = AppState.localPreferredCodec;
+        AppState.participantPreferences = new Map();
+
         AppState.activeRoom = new LivekitClient.Room({
             adaptiveStream: true, 
             dynacast: true,
             videoCaptureDefaults: videoCaptureProfile,
             audioCaptureDefaults: audioConstraints,
-            publishDefaults: { simulcast: true, videoCodec: 'vp8' }
+            publishDefaults: { 
+                simulcast: true, 
+                videoCodec: AppState.currentPublishedCodec
+            }
         });
 
         const localTile = ensureParticipantTile(AppState.activeRoom.localParticipant, 'camera');
@@ -214,10 +222,13 @@ async function initiateCall() {
         AppState.activeRoom.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
             ensureParticipantTile(participant, 'camera');
             checkMassMuteRules();
+            broadcastCodecPreference();
         });
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
             cleanupAllTilesForParticipant(participant.identity);
+            AppState.participantPreferences.delete(participant.identity);
+            evaluateAndNegotiateCodec();
         });
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -227,12 +238,24 @@ async function initiateCall() {
 
         await AppState.activeRoom.connect(connectionInfo.serverUrl, connectionInfo.token);
         
+        // Seed self preference in local room state
+        AppState.participantPreferences.set(AppState.activeRoom.localParticipant.identity, AppState.localPreferredCodec);
+
         AppState.activeRoom.remoteParticipants.forEach(participant => {
             ensureParticipantTile(participant, 'camera');
         });
 
+        broadcastCodecPreference();
+
         for (const track of AppState.preWarmedTracks) {
-            await AppState.activeRoom.localParticipant.publishTrack(track);
+            if (track.kind === 'video') {
+                await AppState.activeRoom.localParticipant.publishTrack(track, {
+                    videoCodec: AppState.currentPublishedCodec,
+                    simulcast: true
+                });
+            } else {
+                await AppState.activeRoom.localParticipant.publishTrack(track);
+            }
         }
 
         checkMassMuteRules();
