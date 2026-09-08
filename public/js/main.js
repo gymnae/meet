@@ -6,17 +6,23 @@ import {
     terminateSession, handleIncomingDataPacket, checkMassMuteRules, ensureParticipantTile,
     broadcastCodecPreference, evaluateAndNegotiateCodec
 } from './livekit-handler.js';
+import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
 
 window.initiateCall = initiateCall;
 window.toggleMic = toggleMic;
 window.toggleCam = toggleCam;
 window.toggleReactionMenu = toggleReactionMenu;
+window.toggleChat = toggleChat;
 window.toggleScreenShare = toggleScreenShare;
 window.toggleFullscreen = toggleFullscreen;
 window.terminateSession = terminateSession;
 window.copyShareLink = copyShareLink;
+window.handleChatSubmit = handleChatSubmit;
+window.handleFileUpload = handleFileUpload;
 
 window.addEventListener('DOMContentLoaded', () => {
+    initChatEngine();
+
     const savedName = localStorage.getItem('portal_username');
     if (savedName) document.getElementById('nameInput').value = savedName;
 
@@ -110,7 +116,6 @@ async function initiateCall() {
             autoGainControl: true
         };
 
-        // Determine client preference: Firefox requires VP8 for grids, while Mobile & Chromium use H.264
         const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
         AppState.localPreferredCodec = isFirefox ? 'vp8' : 'h264';
         AppState.currentPublishedCodec = AppState.localPreferredCodec;
@@ -238,7 +243,6 @@ async function initiateCall() {
 
         await AppState.activeRoom.connect(connectionInfo.serverUrl, connectionInfo.token);
         
-        // Seed self preference in local room state
         AppState.participantPreferences.set(AppState.activeRoom.localParticipant.identity, AppState.localPreferredCodec);
 
         AppState.activeRoom.remoteParticipants.forEach(participant => {
@@ -260,6 +264,9 @@ async function initiateCall() {
 
         checkMassMuteRules();
         recalculateLayout();
+
+        // Sync active room transmissions (messages <60s, files <10m)
+        await syncRoomTransmissions(roomName);
 
     } catch (err) {
         alert("WebRTC Connection Failed: " + err.message);
