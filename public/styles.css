@@ -1,17 +1,36 @@
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a0b10; color: #fff; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: #0a0b10;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    position: fixed;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+}
 
 /* === 80s/90s GATEWAY CONNECTION BOX === */
 .setup-box { background: #121324; padding: 30px; border-radius: 4px; text-align: center; width: 280px; box-shadow: 0 0 20px rgba(255, 0, 127, 0.5), inset 0 0 10px rgba(0, 240, 255, 0.2); margin: auto; border: 2px solid #ff007f; }
-input { padding: 12px; width: calc(100% - 26px); border-radius: 2px; border: 1px solid #00f0ff; background: #1b1c3a; color: #00f0ff; font-size: 16px; margin-bottom: 15px; outline: none; text-shadow: 0 0 5px rgba(0, 240, 255, 0.5); -webkit-appearance: none; }
+input { padding: 12px; width: 100%; border-radius: 2px; border: 1px solid #00f0ff; background: #1b1c3a; color: #00f0ff; font-size: 16px; margin-bottom: 15px; outline: none; text-shadow: 0 0 5px rgba(0, 240, 255, 0.5); -webkit-appearance: none; }
 input:focus { border-color: #ff007f; box-shadow: 0 0 10px rgba(255, 0, 127, 0.6); }
 .primary-btn { width: 100%; padding: 12px; background: #ff007f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 0 5px #fff; box-shadow: 0 0 10px #ff007f; }
 
 /* Navigation Header Bar */
-#room-header { display: none; background: #0d0e1b; padding: 12px 20px; padding-top: calc(12px + env(safe-area-inset-top)); align-items: center; justify-content: space-between; border-bottom: 2px solid #00f0ff; font-size: 14px; box-shadow: 0 4px 15px rgba(0, 240, 255, 0.2); }
+#room-header { display: none; background: #0d0e1b; padding: 12px 20px; padding-top: calc(12px + env(safe-area-inset-top)); align-items: center; justify-content: space-between; border-bottom: 2px solid #00f0ff; font-size: 14px; box-shadow: 0 4px 15px rgba(0, 240, 255, 0.2); flex-shrink: 0; }
 .share-btn { background: #ff007f; color: white; border: none; padding: 8px 14px; border-radius: 2px; cursor: pointer; font-weight: bold; font-size: 13px; text-transform: uppercase; box-shadow: 0 0 8px #ff007f; }
 
 /* Dynamic Grid Workspace */
-#video-container { display: none; flex: 1; flex-direction: column; padding: 10px; box-sizing: border-box; overflow: hidden; height: 100%; position: relative; }
+#video-container { display: none; flex: 1; flex-direction: column; padding: 10px; overflow: hidden; height: 100%; position: relative; width: 100%; }
 
 /* STRICTLY BOUNDED ZERO-SCROLL GRID */
 .grid { display: grid; gap: 12px; width: 100%; height: 100%; overflow: hidden; }
@@ -49,7 +68,7 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
 
 /* Context Menus */
 #camMenu, #reactionMenu, #micMenu { display: none; position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); background: #121324; border: 2px solid #00f0ff; border-radius: 4px; padding: 6px; box-shadow: 0 0 25px rgba(0, 240, 255, 0.5); z-index: 2200; flex-direction: column; gap: 5px; min-width: 200px; max-width: 280px; }
-.cam-item, .react-item { background: #1b1c3a; color: #00f0ff; border: 1px solid #00f0ff; padding: 10px 14px; border-radius: 2px; text-align: left; cursor: pointer; font-size: 13px; font-weight: bold; width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cam-item, .react-item { background: #1b1c3a; color: #00f0ff; border: 1px solid #00f0ff; padding: 10px 14px; border-radius: 2px; text-align: left; cursor: pointer; font-size: 13px; font-weight: bold; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .react-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 5px; }
 .react-emoji-btn { background: #1b1c3a; border: 1px solid #00f0ff; font-size: 20px; padding: 8px 0; border-radius: 2px; cursor: pointer; text-align: center; }
 
@@ -75,7 +94,8 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     right: 10px;
     bottom: 10px;
     width: 340px;
-    background: rgba(14, 15, 29, 0.94);
+    max-width: 100%;
+    background: rgba(14, 15, 29, 0.96);
     border: 2px solid #00f0ff;
     box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);
     border-radius: 4px;
@@ -86,37 +106,65 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     backdrop-filter: blur(12px);
 }
 
-@media (max-width: 600px) {
+/* Mobile Full-Bleed Overlay Viewport Lock (No !important to allow dynamic visualViewport binding) */
+@media (max-width: 768px) {
     .chat-drawer {
+        position: fixed;
         top: 0;
+        left: 0;
         right: 0;
         bottom: 0;
-        left: 0;
         width: 100%;
+        height: 100%;
+        border: none;
         border-radius: 0;
+        z-index: 3500;
     }
 }
 
 .chat-header {
     padding: 12px 14px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    padding-left: calc(14px + env(safe-area-inset-left, 0px));
+    padding-right: calc(14px + env(safe-area-inset-right, 0px));
     border-bottom: 1px solid rgba(0, 240, 255, 0.3);
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: #0d0e1b;
+    flex-shrink: 0;
+    width: 100%;
 }
 .chat-title { display: flex; flex-direction: column; }
 .chat-title span:first-child { font-size: 13px; font-weight: bold; color: #00f0ff; text-shadow: 0 0 6px #00f0ff; letter-spacing: 1px; }
 .chat-subtitle { font-size: 10px; color: #ff007f; margin-top: 2px; }
-.chat-close-btn { background: transparent; border: none; color: #ff007f; font-size: 18px; font-weight: bold; cursor: pointer; text-shadow: 0 0 8px #ff007f; }
+.chat-close-btn { 
+    background: transparent; 
+    border: none; 
+    color: #ff007f; 
+    font-size: 22px; 
+    font-weight: bold; 
+    cursor: pointer; 
+    text-shadow: 0 0 8px #ff007f; 
+    padding: 6px 10px; 
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
 .chat-stream {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 12px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    width: 100%;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
 }
 
 .chat-bubble {
@@ -129,35 +177,35 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     position: relative;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     transition: opacity 0.5s ease;
+    width: 100%;
+    max-width: 100%;
     word-break: break-word;
+    overflow-wrap: anywhere;
 }
 .chat-bubble.self { border-left-color: #ff007f; background: #1c152a; }
 
-.bubble-meta { display: flex; justify-content: space-between; align-items: center; font-size: 10px; margin-bottom: 4px; }
-.sender-name { font-weight: bold; color: #00f0ff; }
+.bubble-meta { display: flex; justify-content: space-between; align-items: center; font-size: 10px; margin-bottom: 4px; gap: 8px; }
+.sender-name { font-weight: bold; color: #00f0ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-bubble.self .sender-name { color: #ff007f; }
-.ttl-pill { font-size: 9px; color: #ffe600; background: rgba(255, 230, 0, 0.1); padding: 2px 4px; border-radius: 2px; }
+.ttl-pill { font-size: 9px; color: #ffe600; background: rgba(255, 230, 0, 0.1); padding: 2px 4px; border-radius: 2px; flex-shrink: 0; }
 
-/* Auto-linked URLs */
+.chat-body {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    width: 100%;
+}
+
 .chat-link {
     color: #00f0ff;
     text-decoration: underline;
     word-break: break-all;
+    overflow-wrap: anywhere;
     transition: all 0.15s ease;
 }
-.chat-link:hover {
-    color: #ff007f;
-    text-shadow: 0 0 6px #ff007f;
-}
-.chat-bubble.self .chat-link {
-    color: #ff77b4;
-}
-.chat-bubble.self .chat-link:hover {
-    color: #00f0ff;
-    text-shadow: 0 0 6px #00f0ff;
-}
+.chat-link:hover { color: #ff007f; text-shadow: 0 0 6px #ff007f; }
+.chat-bubble.self .chat-link { color: #ff77b4; }
+.chat-bubble.self .chat-link:hover { color: #00f0ff; text-shadow: 0 0 6px #00f0ff; }
 
-/* Inline Image & GIF Previews */
 .chat-img-wrap {
     margin-top: 6px;
     border-radius: 3px;
@@ -165,21 +213,15 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     border: 1px solid #00f0ff;
     box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
     background: #080912;
+    max-width: 100%;
 }
-.chat-bubble.self .chat-img-wrap {
-    border-color: #ff007f;
-    box-shadow: 0 0 10px rgba(255, 0, 127, 0.25);
-}
+.chat-bubble.self .chat-img-wrap { border-color: #ff007f; box-shadow: 0 0 10px rgba(255, 0, 127, 0.25); }
 .chat-img-preview, .file-img-preview {
     display: block;
     width: 100%;
-    max-height: 220px;
+    max-height: 200px;
     object-fit: contain;
     background: #080912;
-    transition: transform 0.2s ease;
-}
-.chat-img-preview:hover, .file-img-preview:hover {
-    transform: scale(1.02);
 }
 
 .file-card {
@@ -192,8 +234,10 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     gap: 6px;
     box-shadow: 0 0 12px rgba(255, 0, 127, 0.25);
     transition: opacity 0.5s ease;
+    width: 100%;
+    max-width: 100%;
 }
-.file-card-meta { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
+.file-card-meta { display: flex; justify-content: space-between; align-items: center; font-size: 10px; gap: 8px; }
 .file-name { font-size: 12px; font-weight: bold; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size { font-size: 10px; color: #aaa; }
 .file-img-wrap {
@@ -201,6 +245,7 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     overflow: hidden;
     border: 1px solid rgba(0, 240, 255, 0.5);
     background: #080912;
+    max-width: 100%;
 }
 .file-dl-btn {
     background: #00f0ff;
@@ -208,13 +253,15 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     font-weight: bold;
     font-size: 11px;
     text-align: center;
-    padding: 6px;
+    padding: 8px;
     border-radius: 2px;
     text-decoration: none;
     cursor: pointer;
     text-transform: uppercase;
     box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
     border: none;
+    display: block;
+    width: 100%;
 }
 .file-dl-btn:hover { background: #ff007f; color: #fff; box-shadow: 0 0 10px #ff007f; }
 
@@ -224,24 +271,37 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     background: #1b1c3a;
     width: 100%;
     overflow: hidden;
+    flex-shrink: 0;
 }
 .upload-progress-fill { height: 100%; width: 0%; background: #ff007f; box-shadow: 0 0 8px #ff007f; transition: width 0.1s linear; }
 
 .chat-input-bar {
     padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(10px + env(safe-area-inset-left, 0px));
+    padding-right: calc(10px + env(safe-area-inset-right, 0px));
     background: #0d0e1b;
     border-top: 1px solid rgba(0, 240, 255, 0.3);
     display: flex;
     gap: 8px;
     align-items: center;
+    width: 100%;
+    flex-shrink: 0;
 }
+
+/* Eliminate bottom safe-area gap when on-screen keyboard is open */
+.chat-drawer.keyboard-open .chat-input-bar {
+    padding-bottom: 10px;
+}
+
 .chat-clip-btn {
     background: #1b1c3a;
     border: 1px solid #00f0ff;
     color: #00f0ff;
     font-size: 16px;
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
     border-radius: 2px;
     cursor: pointer;
     display: flex;
@@ -251,9 +311,10 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
 .chat-clip-btn:hover { background: #00f0ff; color: #1b1c3a; }
 .chat-input-bar input[type="text"] {
     flex: 1;
+    min-width: 0;
     margin-bottom: 0;
-    padding: 8px 10px;
-    font-size: 13px;
+    padding: 10px;
+    font-size: 16px; /* Prevents iOS Safari from auto-zooming on focus */
     background: #15172e;
     color: #fff;
     border: 1px solid #00f0ff;
@@ -262,8 +323,9 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     background: #ff007f;
     border: none;
     color: white;
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
     font-size: 14px;
     border-radius: 2px;
     cursor: pointer;
@@ -285,11 +347,80 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     box-shadow: 0 0 8px #ff007f;
 }
 
-/* Controls Dock */
-#control-dock { display: none; background: #0d0e1b; padding: 15px 20px; padding-bottom: calc(15px + env(safe-area-inset-top)); justify-content: center; gap: 14px; border-top: 2px solid #ff007f; z-index: 999; width: 100%; box-sizing: border-box; position: relative; box-shadow: 0 -4px 15px rgba(255, 0, 127, 0.25); }
-.dock-btn { background: #16172e; color: #00f0ff; border: 2px solid #00f0ff; width: 52px; height: 52px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 11px; font-weight: bold; text-transform: uppercase; min-width: 52px; box-shadow: 0 0 8px rgba(0, 240, 255, 0.3); transition: all 0.15s ease; -webkit-tap-highlight-color: transparent; position: relative; }
+/* === CONTROLS DOCK === */
+#control-dock { 
+    display: none; 
+    background: #0d0e1b; 
+    padding: 15px 20px; 
+    padding-bottom: calc(15px + env(safe-area-inset-bottom)); 
+    justify-content: center; 
+    gap: 14px; 
+    border-top: 2px solid #ff007f; 
+    z-index: 999; 
+    width: 100%; 
+    position: relative; 
+    box-shadow: 0 -4px 15px rgba(255, 0, 127, 0.25); 
+    flex-shrink: 0; 
+}
+.dock-btn { 
+    background: #16172e; 
+    color: #00f0ff; 
+    border: 2px solid #00f0ff; 
+    width: 52px; 
+    height: 52px; 
+    border-radius: 50%; 
+    cursor: pointer; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    font-size: 11px; 
+    font-weight: bold; 
+    text-transform: uppercase; 
+    min-width: 52px; 
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.3); 
+    transition: all 0.15s ease; 
+    -webkit-tap-highlight-color: transparent; 
+    position: relative; 
+}
 .dock-btn.active-off { background: #b20059 !important; border-color: #ff007f !important; color: #fff !important; box-shadow: 0 0 12px #ff007f !important; }
 .dock-btn.leave { background: #ff007f; border-color: #ff007f; color: white; width: auto; border-radius: 26px; padding: 0 22px; font-size: 12px; box-shadow: 0 0 12px #ff007f; }
+
+/* Mobile Control Dock Viewport Optimization (Prevents Left/Right Buttons from Clipping) */
+@media (max-width: 768px) {
+    #control-dock {
+        padding: 8px 6px;
+        padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        padding-left: calc(6px + env(safe-area-inset-left, 0px));
+        padding-right: calc(6px + env(safe-area-inset-right, 0px));
+        gap: 6px;
+        justify-content: center;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    #control-dock::-webkit-scrollbar {
+        display: none;
+    }
+    .dock-btn {
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        font-size: 9px;
+        border-width: 1.5px;
+    }
+    .dock-btn.leave {
+        padding: 0 14px;
+        font-size: 10px;
+        border-radius: 21px;
+    }
+}
+
+@media (max-width: 365px) {
+    #control-dock {
+        justify-content: flex-start;
+    }
+}
 
 /* Immersive Theater Overrides for Fullscreen Mode */
 body.pseudo-fullscreen #room-header { display: none !important; }
@@ -301,9 +432,9 @@ body.pseudo-fullscreen #camMenu, body.pseudo-fullscreen #reactionMenu, body.pseu
 /* Landscape Phone Layout Optimizations */
 @media (max-height: 500px) {
     #room-header { padding: 6px 14px !important; font-size: 12px !important; }
-    #control-dock { padding: 6px 15px !important; gap: 8px !important; }
-    .dock-btn { width: 40px !important; height: 40px !important; min-width: 40px !important; font-size: 10px !important; }
-    .dock-btn.leave { border-radius: 20px !important; padding: 0 14px !important; font-size: 10px !important; }
+    #control-dock { padding: 6px 10px !important; gap: 6px !important; }
+    .dock-btn { width: 38px !important; height: 38px !important; min-width: 38px !important; font-size: 9px !important; }
+    .dock-btn.leave { border-radius: 19px !important; padding: 0 12px !important; font-size: 9px !important; }
     #tile_local_camera { width: 90px !important; height: 68px !important; bottom: 8px !important; right: 8px !important; }
     #camMenu, #reactionMenu, #micMenu { bottom: 55px; } 
     body.pseudo-fullscreen #video-container { padding-bottom: 60px !important; }
