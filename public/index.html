@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>meet.</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="meet.">
+    
+    <link rel="stylesheet" href="/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+</head>
+<body>
+
+    <!-- Room Selection Gate -->
+    <div class="setup-box" id="loginSetup">
+        <h2 style="margin-top:0; font-weight: 600; font-size: 28px; color: #ff007f; text-shadow: 0 0 5px #ff007f; letter-spacing: -1px;">meet?</h2>
+        <input type="text" id="roomInput" placeholder="Room Name" required autocorrect="off" autocapitalize="none">
+        <input type="text" id="nameInput" placeholder="Your Name" required>
+        
+        <input type="password" id="passwordInput" placeholder="Password (Optional)">
+        
+        <button id="joinBtn" class="primary-btn" onclick="initiateCall()">meet.</button>
+    </div>
+
+    <!-- Active Room Header -->
+    <div id="room-header">
+        <div>Channel: <strong id="headerRoomLabel" style="color:#00f0ff; text-shadow: 0 0 5px #00f0ff;">-</strong></div>
+        <button class="share-btn" onclick="copyShareLink()">Copy Link</button>
+    </div>
+
+    <!-- Main Viewport Canvas -->
+    <div id="video-container">
+        <div class="grid" id="videoGrid"></div>
+        <div id="camMenu"></div>
+        <div id="reactionMenu"></div>
+    </div>
+
+    <!-- Controls Dock -->
+    <div id="control-dock">
+        <button id="btnMic" class="dock-btn" onclick="toggleMic()">Mic</button>
+        <button id="btnCam" class="dock-btn" onclick="toggleCam()">Cam</button>
+        <button id="btnReact" class="dock-btn" onclick="toggleReactionMenu()">React</button>
+        <button id="btnScreen" class="dock-btn" onclick="toggleScreenShare()">Share</button>
+        <button id="btnFullscreen" class="dock-btn" onclick="toggleFullscreen()">Full</button>
+        <button class="dock-btn leave" onclick="terminateSession(true)">Leave</button>
+    </div>
+
+    <script type="module" src="/js/main.js"></script>
+</body>
+</html>
