@@ -1,5 +1,65 @@
 import { AppState } from './state.js';
 
+// === WEB AUDIO API SYNTH SOUND GENERATOR ===
+export function playSynthSound(type) {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+            ctx.resume();
+        }
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        const now = ctx.currentTime;
+
+        if (type === '👍' || type === '👏') {
+            // High-pitched retro coin/blip
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+            gain.gain.setValueAtTime(0.06, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+            osc.start(now);
+            osc.stop(now + 0.14);
+        } else if (type === '🎉') {
+            // Retro 8-bit fanfare chime
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(523.25, now); // C5
+            osc.frequency.setValueAtTime(659.25, now + 0.07); // E5
+            osc.frequency.setValueAtTime(783.99, now + 0.14); // G5
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+            osc.start(now);
+            osc.stop(now + 0.22);
+        } else if (type === 'HAND_RAISE') {
+            // Synthwave radar ping
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, now);
+            osc.frequency.exponentialRampToValueAtTime(440, now + 0.18);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+            osc.start(now);
+            osc.stop(now + 0.18);
+        } else {
+            // Soft arcade pop
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, now);
+            osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+            gain.gain.setValueAtTime(0.05, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.start(now);
+            osc.stop(now + 0.08);
+        }
+    } catch (e) {
+        // Suppress audio context restrictions if user has not interacted yet
+    }
+}
+
 export function copyShareLink() {
     const roomName = document.getElementById('headerRoomLabel').innerText;
     const deepLink = `${window.location.origin}${window.location.pathname}#${encodeURIComponent(roomName)}`;
@@ -39,16 +99,16 @@ export function recalculateLayout() {
 
     const isMobile = window.innerWidth <= 768;
 
-    // Reset visual frames
+    // Reset base border colors and glow
     rawTiles.forEach(tile => {
         tile.classList.remove('maximized');
         tile.style.borderColor = '#7b2cbf';
+        tile.style.boxShadow = '0 4px 10px rgba(123, 44, 191, 0.3)';
     });
 
     if (targetMaximizeId) {
         grid.classList.add('has-maximized');
         
-        // === FIXED: Sort the array to push the Local Camera to the very end of the sidebar ===
         const gridTiles = rawTiles.sort((a, b) => {
             if (a.id === targetMaximizeId) return -1;
             if (b.id === targetMaximizeId) return 1;
@@ -73,6 +133,7 @@ export function recalculateLayout() {
             if (tile.id === targetMaximizeId) {
                 tile.classList.add('maximized');
                 tile.style.borderColor = '#00f0ff';
+                tile.style.boxShadow = '0 0 25px rgba(0, 240, 255, 0.6)';
                 if (!isMobile) {
                     tile.style.gridColumn = '1';
                     tile.style.gridRow = `1 / span ${sidebarCount}`;
@@ -88,15 +149,13 @@ export function recalculateLayout() {
                     tile.style.gridColumn = `${sidebarIndex}`;
                     tile.style.gridRow = '2';
                 }
-                sidebarIndex++; // Because local is sorted last, it gets the highest index and sits at the bottom
+                sidebarIndex++;
             }
         });
 
     } else {
         grid.classList.remove('has-maximized');
         
-        // === FIXED: EXCLUDE THE PIP FLOATING CAMERA FROM GRID MATH ===
-        // This prevents the invisible "hole" bug when calculating rows and columns
         const gridTiles = rawTiles.filter(t => t.id !== 'tile_local_camera');
         const totalTiles = Math.max(1, gridTiles.length);
         
@@ -120,7 +179,6 @@ export function recalculateLayout() {
             tile.style.gridRow = 'auto';
         });
         
-        // Reset floating properties safely
         const localCam = document.getElementById('tile_local_camera');
         if (localCam) {
             localCam.style.gridColumn = 'auto';
@@ -133,12 +191,25 @@ export function recalculateLayout() {
         localCameraTile.style.borderColor = '#ff007f';
     }
 
+    // === ACTIVE SPEAKER HIGHLIGHT ENGINE (INCLUDING MAXIMIZED TILES) ===
     if (AppState.activeSpeakerIdentity) {
         const isLocalSpeaker = AppState.activeRoom && AppState.activeSpeakerIdentity === AppState.activeRoom.localParticipant?.identity;
         const speakerTileId = isLocalSpeaker ? 'tile_local_camera' : `tile_${AppState.activeSpeakerIdentity}_camera`;
+        const speakerScreenTileId = isLocalSpeaker ? 'tile_local_screen_share' : `tile_${AppState.activeSpeakerIdentity}_screen_share`;
+
         const speakerTile = document.getElementById(speakerTileId);
-        if (speakerTile && speakerTileId !== targetMaximizeId) {
+        if (speakerTile) {
             speakerTile.style.borderColor = '#39ff14';
+            speakerTile.style.boxShadow = '0 0 15px rgba(57, 255, 20, 0.7)';
+        }
+
+        // If the maximized view belongs to the speaker (camera or their presentation), light it up green
+        if (targetMaximizeId && (targetMaximizeId === speakerTileId || targetMaximizeId === speakerScreenTileId)) {
+            const maxTile = document.getElementById(targetMaximizeId);
+            if (maxTile) {
+                maxTile.style.borderColor = '#39ff14';
+                maxTile.style.boxShadow = '0 0 35px rgba(57, 255, 20, 0.9)';
+            }
         }
     }
 }
@@ -146,6 +217,8 @@ export function recalculateLayout() {
 export function triggerFloatingEmoji(tileId, emoji) {
     const tile = document.getElementById(tileId) || document.getElementById('tile_local_camera');
     if (!tile) return;
+
+    playSynthSound(emoji);
 
     const floatingEl = document.createElement('div');
     floatingEl.className = 'floating-emoji';
@@ -166,6 +239,7 @@ export function updateHandBadge(participantIdentity, isRaised) {
     if (tile) {
         if (isRaised) {
             tile.classList.add('hand-raised');
+            playSynthSound('HAND_RAISE');
         } else {
             tile.classList.remove('hand-raised');
         }
