@@ -1,16 +1,18 @@
 export const AppState = {
     activeRoom: null,
+    preWarmedTracks: [],
+    pinnedTileId: null,
+    activeScreenShareTileId: null,
+    activeSpeakerIdentity: null,
     micMuted: false,
     camMuted: false,
+    handRaised: false,
     screenSharingActive: false,
-    preWarmedTracks: [],
-    
-    pinnedTileId: null,
-    activeSpeakerIdentity: null,
-    activeScreenShareTileId: null,
     currentCameraDeviceId: null,
-
-    // FEATURE 1: State Tracking
+    participantPreferences: new Map(),
+    localPreferredCodec: 'h264',
+    currentPublishedCodec: 'h264',
+    isRenegotiating: false,
     handRaised: false
 };
 
