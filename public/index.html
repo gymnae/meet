@@ -16,13 +16,13 @@
 
     <!-- Room Selection Gate -->
     <div class="setup-box" id="loginSetup">
-        <h2 style="margin-top:0; font-weight: 600; font-size: 28px; color: #ff007f; text-shadow: 0 0 5px #ff007f; letter-spacing: -1px;">meet?</h2>
+        <h2 style="margin-top:0; font-weight: 600; font-size: 28px; color: #ff007f; text-shadow: 0 0 5px #ff007f; letter-spacing: -1px;">meet.</h2>
         <input type="text" id="roomInput" placeholder="Room Name" required autocorrect="off" autocapitalize="none">
         <input type="text" id="nameInput" placeholder="Your Name" required>
         
         <input type="password" id="passwordInput" placeholder="Password (Optional)">
         
-        <button id="joinBtn" class="primary-btn" onclick="initiateCall()">meet.</button>
+        <button id="joinBtn" class="primary-btn" onclick="initiateCall()">Connect Session</button>
     </div>
 
     <!-- Active Room Header -->
@@ -36,6 +36,31 @@
         <div class="grid" id="videoGrid"></div>
         <div id="camMenu"></div>
         <div id="reactionMenu"></div>
+        <div id="micMenu"></div>
+
+        <!-- Slide-Out Ephemeral Chat & File Drawer -->
+        <div id="chatDrawer" class="chat-drawer">
+            <div class="chat-header">
+                <div class="chat-title">
+                    <span>TRANSMISSIONS</span>
+                    <span class="chat-subtitle">Chat: 1m TTL | Files: 10m TTL</span>
+                </div>
+                <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+            </div>
+            
+            <div id="chatStream" class="chat-stream"></div>
+
+            <div id="uploadProgressBar" class="upload-progress-container">
+                <div id="uploadProgressFill" class="upload-progress-fill"></div>
+            </div>
+
+            <form id="chatForm" class="chat-input-bar" onsubmit="handleChatSubmit(event)">
+                <input type="file" id="fileInput" style="display: none;" onchange="handleFileUpload(event)">
+                <button type="button" class="chat-clip-btn" title="Share file (up to 200MB)" onclick="document.getElementById('fileInput').click()">📎</button>
+                <input type="text" id="chatInput" placeholder="Type transmission..." autocomplete="off">
+                <button type="submit" class="chat-send-btn">➤</button>
+            </form>
+        </div>
     </div>
 
     <!-- Controls Dock -->
@@ -43,6 +68,10 @@
         <button id="btnMic" class="dock-btn" onclick="toggleMic()">Mic</button>
         <button id="btnCam" class="dock-btn" onclick="toggleCam()">Cam</button>
         <button id="btnReact" class="dock-btn" onclick="toggleReactionMenu()">React</button>
+        <button id="btnChat" class="dock-btn" onclick="toggleChat()">
+            Chat
+            <span id="chatBadge" class="chat-badge"></span>
+        </button>
         <button id="btnScreen" class="dock-btn" onclick="toggleScreenShare()">Share</button>
         <button id="btnFullscreen" class="dock-btn" onclick="toggleFullscreen()">Full</button>
         <button class="dock-btn leave" onclick="terminateSession(true)">Leave</button>
