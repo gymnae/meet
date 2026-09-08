@@ -80,6 +80,80 @@ export function sendDataPacket(payload) {
     AppState.activeRoom.localParticipant.publishData(data, LivekitClient.DataPacket_Kind.RELIABLE);
 }
 
+// === CODEC CONSENSUS & RENEGOTIATION ENGINE ===
+export function broadcastCodecPreference() {
+    if (!AppState.activeRoom || !AppState.activeRoom.localParticipant) return;
+    sendDataPacket({
+        type: 'CODEC_PREFERENCE',
+        identity: AppState.activeRoom.localParticipant.identity,
+        preference: AppState.localPreferredCodec
+    });
+}
+
+let negotiationDebounceTimer = null;
+export function evaluateAndNegotiateCodec() {
+    clearTimeout(negotiationDebounceTimer);
+    negotiationDebounceTimer = setTimeout(async () => {
+        let h264Count = 0;
+        let vp8Count = 0;
+
+        for (const pref of AppState.participantPreferences.values()) {
+            if (pref === 'vp8') vp8Count++;
+            else h264Count++;
+        }
+
+        // Majority rule: VP8 takes over only if it has strictly more votes than H.264
+        const targetCodec = vp8Count > h264Count ? 'vp8' : 'h264';
+
+        if (targetCodec !== AppState.currentPublishedCodec) {
+            console.log(`[Codec Engine] Majority consensus shifted (H.264: ${h264Count}, VP8: ${vp8Count}). Target: ${targetCodec}`);
+            await renegotiateVideoCodec(targetCodec);
+        }
+    }, 300);
+}
+
+export async function renegotiateVideoCodec(newCodec) {
+    if (AppState.currentPublishedCodec === newCodec || AppState.isRenegotiating) return;
+    if (!AppState.activeRoom || !AppState.activeRoom.localParticipant) return;
+
+    AppState.isRenegotiating = true;
+    const oldCodec = AppState.currentPublishedCodec;
+    AppState.currentPublishedCodec = newCodec;
+
+    try {
+        // 1. Camera track renegotiation
+        const cameraPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+        if (cameraPub && cameraPub.videoTrack && !AppState.camMuted) {
+            const track = cameraPub.videoTrack;
+            await AppState.activeRoom.localParticipant.unpublishTrack(track, false);
+            await AppState.activeRoom.localParticipant.publishTrack(track, {
+                videoCodec: newCodec,
+                simulcast: true
+            });
+            console.log(`[Codec Engine] Camera stream renegotiated to ${newCodec}.`);
+        }
+
+        // 2. Screen-share track renegotiation
+        const screenPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.ScreenShare);
+        if (screenPub && screenPub.videoTrack && AppState.screenSharingActive) {
+            const screenTrack = screenPub.videoTrack;
+            await AppState.activeRoom.localParticipant.unpublishTrack(screenTrack, false);
+            await AppState.activeRoom.localParticipant.publishTrack(screenTrack, {
+                videoCodec: newCodec,
+                simulcast: true
+            });
+            console.log(`[Codec Engine] Screen share stream renegotiated to ${newCodec}.`);
+        }
+    } catch (err) {
+        console.error("[Codec Engine] Renegotiation error:", err);
+        AppState.currentPublishedCodec = oldCodec;
+    } finally {
+        setTimeout(() => {
+            AppState.isRenegotiating = false;
+        }, 200);
+    }
+}
+
 export function handleIncomingDataPacket(payload, participant) {
     try {
         const data = JSON.parse(new TextDecoder().decode(payload));
@@ -88,6 +162,15 @@ export function handleIncomingDataPacket(payload, participant) {
             triggerFloatingEmoji(tileId, data.emoji);
         } else if (data.type === 'HAND_RAISE') {
             updateHandBadge(participant?.identity, data.raised);
+        } else if (data.type === 'CODEC_PREFERENCE') {
+            const isNewParticipant = !AppState.participantPreferences.has(data.identity);
+            AppState.participantPreferences.set(data.identity, data.preference);
+
+            // Echo back local preference so newly joined peer receives full room state
+            if (isNewParticipant && AppState.activeRoom && AppState.activeRoom.localParticipant) {
+                broadcastCodecPreference();
+            }
+            evaluateAndNegotiateCodec();
         }
     } catch (e) {
         console.error("[DataChannel] Failed to parse incoming packet:", e);
@@ -250,7 +333,6 @@ export async function toggleMic() {
                                 await AppState.activeRoom.localParticipant.unpublishTrack(audioPub.audioTrack);
                                 audioPub.audioTrack.stop();
                             }
-                            // Enforce WebRTC hardware noise suppression and echo cancellation
                             const newMicTrack = await LivekitClient.createLocalAudioTrack({ 
                                 deviceId: device.deviceId,
                                 echoCancellation: true,
@@ -427,7 +509,10 @@ export async function toggleCam() {
                                 videoTag.play().catch(() => {});
                                 applyDynamicMirrorEffect(newLensTrack);
                             }
-                            await AppState.activeRoom.localParticipant.publishTrack(newLensTrack);
+                            await AppState.activeRoom.localParticipant.publishTrack(newLensTrack, {
+                                videoCodec: AppState.currentPublishedCodec,
+                                simulcast: true
+                            });
                             AppState.preWarmedTracks.push(newLensTrack);
                         }
                         recalculateLayout();
@@ -445,7 +530,11 @@ export async function toggleScreenShare() {
     try {
         AppState.screenSharingActive = !AppState.screenSharingActive;
         const btn = document.getElementById('btnScreen');
-        await AppState.activeRoom.localParticipant.setScreenShareEnabled(AppState.screenSharingActive);
+        await AppState.activeRoom.localParticipant.setScreenShareEnabled(
+            AppState.screenSharingActive,
+            { audio: false },
+            { videoCodec: AppState.currentPublishedCodec, simulcast: true }
+        );
         btn.innerText = AppState.screenSharingActive ? "Stop" : "Share";
         AppState.screenSharingActive ? btn.classList.add('active-off') : btn.classList.remove('active-off');
     } catch (e) {
@@ -457,6 +546,10 @@ export async function toggleScreenShare() {
 
 export function cleanupTileTrack(participantIdentity, trackSource) {
     const isLocal = participantIdentity === 'local' || (AppState.activeRoom && participantIdentity === AppState.activeRoom.localParticipant?.identity);
+    
+    // During mid-call renegotiation, avoid destroying the local video DOM element
+    if (AppState.isRenegotiating && isLocal) return;
+
     const targetTileId = isLocal ? (trackSource === 'camera' ? 'tile_local_camera' : 'tile_local_screen_share') : `tile_${participantIdentity}_${trackSource}`;
     
     if (targetTileId === AppState.activeScreenShareTileId) AppState.activeScreenShareTileId = null;
