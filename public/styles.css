@@ -1,0 +1,95 @@
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a0b10; color: #fff; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+
+/* === 80s/90s GATEWAY CONNECTION BOX === */
+.setup-box { background: #121324; padding: 30px; border-radius: 4px; text-align: center; width: 280px; box-shadow: 0 0 20px rgba(255, 0, 127, 0.5), inset 0 0 10px rgba(0, 240, 255, 0.2); margin: auto; border: 2px solid #ff007f; }
+input { padding: 12px; width: calc(100% - 26px); border-radius: 2px; border: 1px solid #00f0ff; background: #1b1c3a; color: #00f0ff; font-size: 16px; margin-bottom: 15px; outline: none; text-shadow: 0 0 5px rgba(0, 240, 255, 0.5); -webkit-appearance: none; }
+input:focus { border-color: #ff007f; box-shadow: 0 0 10px rgba(255, 0, 127, 0.6); }
+.primary-btn { width: 100%; padding: 12px; background: #ff007f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 0 5px #fff; box-shadow: 0 0 10px #ff007f; }
+
+/* Navigation Header Bar */
+#room-header { display: none; background: #0d0e1b; padding: 12px 20px; padding-top: calc(12px + env(safe-area-inset-top)); align-items: center; justify-content: space-between; border-bottom: 2px solid #00f0ff; font-size: 14px; box-shadow: 0 4px 15px rgba(0, 240, 255, 0.2); }
+.share-btn { background: #ff007f; color: white; border: none; padding: 8px 14px; border-radius: 2px; cursor: pointer; font-weight: bold; font-size: 13px; text-transform: uppercase; box-shadow: 0 0 8px #ff007f; }
+
+/* Dynamic Grid Workspace */
+#video-container { display: none; flex: 1; flex-direction: column; padding: 10px; box-sizing: border-box; overflow: hidden; height: 100%; position: relative; }
+
+/* STRICTLY BOUNDED ZERO-SCROLL GRID */
+.grid { display: grid; gap: 12px; width: 100%; height: 100%; overflow: hidden; }
+
+/* Maximized Presentation Target */
+.grid.has-maximized .video-tile.maximized { border-color: #00f0ff !important; box-shadow: 0 0 25px rgba(0, 240, 255, 0.6) !important; z-index: 5; }
+
+/* Glowing Neon Video Tiles */
+.video-tile { background: #111222; border-radius: 4px; overflow: hidden; position: relative; border: 2px solid #7b2cbf; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(123, 44, 191, 0.3); transition: all 0.25s ease; cursor: pointer; min-width: 0; min-height: 0; }
+video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-events: none !important; -webkit-user-select: none; user-select: none; position: relative; z-index: 2; }
+.name-tag { position: absolute; bottom: 8px; left: 8px; background: rgba(13, 14, 27, 0.85); padding: 4px 10px; border-radius: 2px; font-size: 11px; font-weight: bold; color: #00f0ff; border: 1px solid #00f0ff; text-shadow: 0 0 3px #00f0ff; pointer-events: none; z-index: 10; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.touch-shield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 8; background: transparent; pointer-events: auto !important; }
+
+/* Responsive Screen Share Viewport Fitting */
+.video-tile.screen-share video { object-fit: contain !important; background: #080912 !important; }
+
+/* Avatar Placeholders */
+.avatar-placeholder { position: absolute; width: 70px; height: 70px; max-width: 50%; max-height: 50%; aspect-ratio: 1; border-radius: 50%; background: #1b1c3a; border: 2px solid #ff007f; box-shadow: 0 0 15px rgba(255, 0, 127, 0.5); display: flex; justify-content: center; align-items: center; font-size: 28px; font-weight: bold; color: #00f0ff; text-shadow: 0 0 8px #00f0ff; z-index: 1; }
+
+/* === DEFAULT: FLOATING PIP CAMERA === */
+#tile_local_camera { position: absolute !important; bottom: 15px !important; right: 15px !important; width: 160px !important; height: 120px !important; z-index: 2500 !important; border: 2px solid #ff007f !important; box-shadow: 0 0 15px #ff007f !important; border-radius: 4px !important; transform: translateZ(0) !important; }
+#tile_local_camera video { transform: none; } 
+#tile_local_camera.mirror-mode video { transform: scaleX(-1) !important; } 
+@media (max-width: 600px) and (min-height: 501px) { #tile_local_camera { width: 110px !important; height: 85px !important; bottom: 10px !important; right: 10px !important; } }
+
+/* === OVERRIDE: INTEGRATE LOCAL CAMERA INTO THE SIDEBAR GRID === */
+.grid.has-maximized #tile_local_camera { position: relative !important; bottom: auto !important; right: auto !important; width: 100% !important; height: 100% !important; box-shadow: 0 4px 10px rgba(123, 44, 191, 0.3) !important; z-index: 10 !important; }
+
+/* Sidebar Separation Styles with Clipping Fix */
+@media (min-width: 769px) {
+    .grid.has-maximized #tile_local_camera:not(.maximized) { margin-top: 20px !important; height: calc(100% - 20px) !important; border-top: 4px dashed #ff007f !important; }
+}
+@media (max-width: 768px) {
+    .grid.has-maximized #tile_local_camera:not(.maximized) { margin-left: 18px !important; width: calc(100% - 18px) !important; border-left: 4px dashed #ff007f !important; }
+}
+
+/* === FIXED: EXTENDED CONTEXTUAL MENUS SUPPORT === */
+#camMenu, #reactionMenu, #micMenu { display: none; position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); background: #121324; border: 2px solid #00f0ff; border-radius: 4px; padding: 6px; box-shadow: 0 0 25px rgba(0, 240, 255, 0.5); z-index: 2000; flex-direction: column; gap: 5px; min-width: 200px; max-width: 280px; }
+.cam-item, .react-item { background: #1b1c3a; color: #00f0ff; border: 1px solid #00f0ff; padding: 10px 14px; border-radius: 2px; text-align: left; cursor: pointer; font-size: 13px; font-weight: bold; width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.react-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 5px; }
+.react-emoji-btn { background: #1b1c3a; border: 1px solid #00f0ff; font-size: 20px; padding: 8px 0; border-radius: 2px; cursor: pointer; text-align: center; }
+
+@media (hover: hover) {
+    .cam-item:hover, .react-item:hover, .react-emoji-btn:hover { background: #ff007f; color: #fff; border-color: #ff007f; box-shadow: 0 0 8px #ff007f; }
+    .cam-item.turn-off:hover { background: #ff3333 !important; border-color: #ff3333 !important; box-shadow: 0 0 8px #ff3333 !important; }
+}
+
+.cam-item.turn-off { background: #b20059 !important; border-color: #ff007f !important; color: #fff !important; font-weight: bold !important; text-align: center !important; text-transform: uppercase; }
+.cam-item:disabled { opacity: 0.25 !important; cursor: not-allowed !important; background: #0a0b14 !important; border-color: #2b2d31 !important; color: #4f545c !important; }
+
+/* Hand Raise Badge & Floating Animations */
+.hand-badge { position: absolute; top: 8px; right: 8px; background: #ff007f; color: #fff; font-size: 16px; padding: 4px 6px; border-radius: 4px; box-shadow: 0 0 10px #ff007f; z-index: 12; display: none; }
+.video-tile.hand-raised .hand-badge { display: block; }
+.floating-emoji { position: absolute; font-size: 32px; z-index: 3000; pointer-events: none; animation: floatUp 1.8s cubic-bezier(0.25, 1, 0.5, 1) FORWARDS; text-shadow: 0 0 10px #00f0ff; }
+@keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(0.8); } 50% { opacity: 1; transform: translateY(-50px) scale(1.3); } 100% { opacity: 0; transform: translateY(-110px) scale(1); } }
+
+/* === RADICAL NEON FOOTER CONTROLS DOCK === */
+#control-dock { display: none; background: #0d0e1b; padding: 15px 20px; padding-bottom: calc(15px + env(safe-area-inset-top)); justify-content: center; gap: 14px; border-top: 2px solid #ff007f; z-index: 999; width: 100%; box-sizing: border-box; position: relative; box-shadow: 0 -4px 15px rgba(255, 0, 127, 0.25); }
+.dock-btn { background: #16172e; color: #00f0ff; border: 2px solid #00f0ff; width: 52px; height: 52px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 11px; font-weight: bold; text-transform: uppercase; min-width: 52px; box-shadow: 0 0 8px rgba(0, 240, 255, 0.3); transition: all 0.15s ease; -webkit-tap-highlight-color: transparent; }
+.dock-btn.active-off { background: #b20059 !important; border-color: #ff007f !important; color: #fff !important; box-shadow: 0 0 12px #ff007f !important; }
+.dock-btn.leave { background: #ff007f; border-color: #ff007f; color: white; width: auto; border-radius: 26px; padding: 0 22px; font-size: 12px; box-shadow: 0 0 12px #ff007f; }
+
+/* Immersive Theater Overrides for Fullscreen Mode */
+body.pseudo-fullscreen #room-header { display: none !important; }
+body.pseudo-fullscreen #control-dock { position: absolute !important; bottom: 0 !important; left: 0 !important; width: 100% !important; background: rgba(13, 14, 27, 0.8) !important; -webkit-backdrop-filter: blur(15px) !important; backdrop-filter: blur(15px) !important; border-top: 2px solid #ff007f !important; }
+body.pseudo-fullscreen #video-container { padding-bottom: 95px !important; }
+body.pseudo-fullscreen #tile_local_camera { bottom: 110px !important; }
+body.pseudo-fullscreen #camMenu, body.pseudo-fullscreen #reactionMenu, body.pseudo-fullscreen #micMenu { bottom: 95px; }
+
+/* Landscape Phone Layout Optimizations */
+@media (max-height: 500px) {
+    #room-header { padding: 6px 14px !important; font-size: 12px !important; }
+    #control-dock { padding: 6px 15px !important; gap: 8px !important; }
+    .dock-btn { width: 40px !important; height: 40px !important; min-width: 40px !important; font-size: 10px !important; }
+    .dock-btn.leave { border-radius: 20px !important; padding: 0 14px !important; font-size: 10px !important; }
+    #tile_local_camera { width: 90px !important; height: 68px !important; bottom: 8px !important; right: 8px !important; }
+    #camMenu, #reactionMenu, #micMenu { bottom: 55px; } 
+    body.pseudo-fullscreen #video-container { padding-bottom: 60px !important; }
+    body.pseudo-fullscreen #tile_local_camera { bottom: 70px !important; }
+    body.pseudo-fullscreen #camMenu, body.pseudo-fullscreen #reactionMenu, body.pseudo-fullscreen #micMenu { bottom: 60px; }
+}
