@@ -59,6 +59,7 @@ export function attachParticipantVideoTrack(track, participant, streamSource) {
     nativeVideoTag.controls = false;
     nativeVideoTag.setAttribute('playsinline', 'true');
     nativeVideoTag.setAttribute('webkit-playsinline', 'true');
+    nativeVideoTag.setAttribute('muted', '');
     nativeVideoTag.style.pointerEvents = 'none';
     nativeVideoTag.style.position = 'relative';
     nativeVideoTag.style.zIndex = '2';
@@ -185,7 +186,6 @@ export async function toggleMic() {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioDevices = devices.filter(d => d.kind === 'audioinput');
         
-        // === NEW: Permission Gateway Check ===
         const needsPermission = audioDevices.length === 0 || audioDevices.every(d => d.label === '');
 
         micMenu.innerHTML = '';
@@ -198,14 +198,13 @@ export async function toggleMic() {
                 e.preventDefault(); e.stopPropagation();
                 micMenu.style.display = 'none';
                 try {
-                    // Force a raw browser permission request
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    stream.getTracks().forEach(t => t.stop()); // Immediately stop it, we just needed the permission shield dropped
-                    
-                    // Trigger the menu again now that labels are unlocked
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                    });
+                    stream.getTracks().forEach(t => t.stop());
                     toggleMic();
                 } catch (err) {
-                    alert("Microphone access is permanently blocked by your browser settings. Please check your URL bar permissions.");
+                    alert("Microphone access is blocked by browser settings. Please check your URL bar permissions.");
                 }
             };
             micMenu.appendChild(requestRow);
@@ -251,7 +250,13 @@ export async function toggleMic() {
                                 await AppState.activeRoom.localParticipant.unpublishTrack(audioPub.audioTrack);
                                 audioPub.audioTrack.stop();
                             }
-                            const newMicTrack = await LivekitClient.createLocalAudioTrack({ deviceId: device.deviceId });
+                            // Enforce WebRTC hardware noise suppression and echo cancellation
+                            const newMicTrack = await LivekitClient.createLocalAudioTrack({ 
+                                deviceId: device.deviceId,
+                                echoCancellation: true,
+                                noiseSuppression: true,
+                                autoGainControl: true
+                            });
                             await AppState.activeRoom.localParticipant.publishTrack(newMicTrack);
                         }
                         
@@ -292,7 +297,6 @@ export async function toggleCam() {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(d => d.kind === 'videoinput');
         
-        // === NEW: Permission Gateway Check ===
         const needsPermission = videoDevices.length === 0 || videoDevices.every(d => d.label === '');
 
         menu.innerHTML = '';
@@ -309,7 +313,7 @@ export async function toggleCam() {
                     stream.getTracks().forEach(t => t.stop()); 
                     toggleCam();
                 } catch (err) {
-                    alert("Camera access is permanently blocked by your browser settings. Please check your URL bar permissions.");
+                    alert("Camera access is blocked by browser settings. Please check your URL bar permissions.");
                 }
             };
             menu.appendChild(requestRow);
