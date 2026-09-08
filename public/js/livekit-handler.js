@@ -1,5 +1,6 @@
 import { AppState, videoCaptureProfile } from './state.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge } from './ui.js';
+import { renderMessage, renderFile } from './chat.js';
 
 export function ensureParticipantTile(participant, streamSource = 'camera') {
     const isLocalUser = participant.isLocal || (AppState.activeRoom && participant.identity === AppState.activeRoom.localParticipant?.identity);
@@ -80,7 +81,6 @@ export function sendDataPacket(payload) {
     AppState.activeRoom.localParticipant.publishData(data, LivekitClient.DataPacket_Kind.RELIABLE);
 }
 
-// === CODEC CONSENSUS & RENEGOTIATION ENGINE ===
 export function broadcastCodecPreference() {
     if (!AppState.activeRoom || !AppState.activeRoom.localParticipant) return;
     sendDataPacket({
@@ -102,11 +102,10 @@ export function evaluateAndNegotiateCodec() {
             else h264Count++;
         }
 
-        // Majority rule: VP8 takes over only if it has strictly more votes than H.264
         const targetCodec = vp8Count > h264Count ? 'vp8' : 'h264';
 
         if (targetCodec !== AppState.currentPublishedCodec) {
-            console.log(`[Codec Engine] Majority consensus shifted (H.264: ${h264Count}, VP8: ${vp8Count}). Target: ${targetCodec}`);
+            console.log(`[Codec Engine] Consensus shifted (H.264: ${h264Count}, VP8: ${vp8Count}). Target: ${targetCodec}`);
             await renegotiateVideoCodec(targetCodec);
         }
     }, 300);
@@ -121,7 +120,6 @@ export async function renegotiateVideoCodec(newCodec) {
     AppState.currentPublishedCodec = newCodec;
 
     try {
-        // 1. Camera track renegotiation
         const cameraPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
         if (cameraPub && cameraPub.videoTrack && !AppState.camMuted) {
             const track = cameraPub.videoTrack;
@@ -130,10 +128,8 @@ export async function renegotiateVideoCodec(newCodec) {
                 videoCodec: newCodec,
                 simulcast: true
             });
-            console.log(`[Codec Engine] Camera stream renegotiated to ${newCodec}.`);
         }
 
-        // 2. Screen-share track renegotiation
         const screenPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.ScreenShare);
         if (screenPub && screenPub.videoTrack && AppState.screenSharingActive) {
             const screenTrack = screenPub.videoTrack;
@@ -142,7 +138,6 @@ export async function renegotiateVideoCodec(newCodec) {
                 videoCodec: newCodec,
                 simulcast: true
             });
-            console.log(`[Codec Engine] Screen share stream renegotiated to ${newCodec}.`);
         }
     } catch (err) {
         console.error("[Codec Engine] Renegotiation error:", err);
@@ -166,14 +161,17 @@ export function handleIncomingDataPacket(payload, participant) {
             const isNewParticipant = !AppState.participantPreferences.has(data.identity);
             AppState.participantPreferences.set(data.identity, data.preference);
 
-            // Echo back local preference so newly joined peer receives full room state
             if (isNewParticipant && AppState.activeRoom && AppState.activeRoom.localParticipant) {
                 broadcastCodecPreference();
             }
             evaluateAndNegotiateCodec();
+        } else if (data.type === 'CHAT_MESSAGE') {
+            renderMessage(data.payload, false);
+        } else if (data.type === 'FILE_SHARED') {
+            renderFile(data.payload, false);
         }
     } catch (e) {
-        console.error("[DataChannel] Failed to parse incoming packet:", e);
+        console.error("[DataChannel] Packet parse error:", e);
     }
 }
 
@@ -287,7 +285,7 @@ export async function toggleMic() {
                     stream.getTracks().forEach(t => t.stop());
                     toggleMic();
                 } catch (err) {
-                    alert("Microphone access is blocked by browser settings. Please check your URL bar permissions.");
+                    alert("Microphone access is blocked by browser settings.");
                 }
             };
             micMenu.appendChild(requestRow);
@@ -347,7 +345,6 @@ export async function toggleMic() {
                         btn.classList.remove('active-off');
                     } catch (err) {
                         console.error("[Hardware] Mic switch failed", err);
-                        alert("Could not access this microphone. It may be in use by another app.");
                     }
                 };
                 micMenu.appendChild(optionRow);
@@ -356,10 +353,6 @@ export async function toggleMic() {
         micMenu.style.display = 'flex';
     } catch (err) { 
         console.error("[Hardware] Mic enumerator failed:", err); 
-        AppState.micMuted = !AppState.micMuted;
-        btn.innerText = AppState.micMuted ? "Unmute" : "Mic";
-        AppState.micMuted ? btn.classList.add('active-off') : btn.classList.remove('active-off');
-        try { await AppState.activeRoom.localParticipant.setMicrophoneEnabled(!AppState.micMuted); } catch(e){}
     }
 }
 
@@ -372,13 +365,11 @@ export async function toggleCam() {
     if (micMenu) micMenu.style.display = 'none';
     
     const btn = document.getElementById('btnCam');
-    
     if (menu.style.display === 'flex') { menu.style.display = 'none'; return; }
     
     try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(d => d.kind === 'videoinput');
-        
         const needsPermission = videoDevices.length === 0 || videoDevices.every(d => d.label === '');
 
         menu.innerHTML = '';
@@ -395,7 +386,7 @@ export async function toggleCam() {
                     stream.getTracks().forEach(t => t.stop()); 
                     toggleCam();
                 } catch (err) {
-                    alert("Camera access is blocked by browser settings. Please check your URL bar permissions.");
+                    alert("Camera access is blocked by browser settings.");
                 }
             };
             menu.appendChild(requestRow);
@@ -546,8 +537,6 @@ export async function toggleScreenShare() {
 
 export function cleanupTileTrack(participantIdentity, trackSource) {
     const isLocal = participantIdentity === 'local' || (AppState.activeRoom && participantIdentity === AppState.activeRoom.localParticipant?.identity);
-    
-    // During mid-call renegotiation, avoid destroying the local video DOM element
     if (AppState.isRenegotiating && isLocal) return;
 
     const targetTileId = isLocal ? (trackSource === 'camera' ? 'tile_local_camera' : 'tile_local_screen_share') : `tile_${participantIdentity}_${trackSource}`;
