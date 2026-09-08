@@ -103,48 +103,54 @@ async function initiateCall() {
 
         joinBtn.innerText = "Opening Camera...";
 
+        // Standard WebRTC Noise Suppression & Echo Cancellation Constraints
+        const audioConstraints = {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        };
+
+        // Codec changed to 'vp8' for universal Firefox simulcast decoding compatibility
         AppState.activeRoom = new LivekitClient.Room({
-            adaptiveStream: { pixelDensity: "screen" }, 
+            adaptiveStream: true, 
             dynacast: true,
             videoCaptureDefaults: videoCaptureProfile,
-            publishDefaults: { simulcast: true, videoCodec: 'h264' }
+            audioCaptureDefaults: audioConstraints,
+            publishDefaults: { simulcast: true, videoCodec: 'vp8' }
         });
 
         const localTile = ensureParticipantTile(AppState.activeRoom.localParticipant, 'camera');
         
-        // === FIXED: MULTI-STAGE WATERFALL HARDWARE ENGINE ===
         let audioEnabled = true;
         let videoEnabled = true;
 
         try {
-            // First Attempt: Try to get BOTH Mic and Cam
-            AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ audio: true, video: videoCaptureProfile });
+            AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ 
+                audio: audioConstraints, 
+                video: videoCaptureProfile 
+            });
         } catch (hwErr) {
             console.warn("[Hardware] Failed both, trying audio-only...", hwErr);
             try {
-                // Second Attempt: Try just the Microphone
-                AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ audio: true });
+                AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ audio: audioConstraints });
                 videoEnabled = false;
                 alert("Camera not found or blocked. Joining with audio only.");
             } catch (audioErr) {
                 console.warn("[Hardware] Failed audio-only, trying video-only...", audioErr);
                 try {
-                    // Third Attempt: Try just the Camera
                     AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ video: videoCaptureProfile });
                     audioEnabled = false;
                     alert("Microphone not found or blocked. Joining with video only.");
                 } catch (videoErr) {
-                    // Final Fallback: Complete Hardware Failure -> Listen Only Mode
                     console.warn("[Hardware] Complete hardware failure.", videoErr);
                     AppState.preWarmedTracks = [];
                     audioEnabled = false;
                     videoEnabled = false;
-                    alert("Could not access your camera or microphone. You are joining in Listen-Only mode.");
+                    alert("Could not access camera or microphone. Joining in Listen-Only mode.");
                 }
             }
         }
 
-        // Sync UI states based on fallback results
         if (!audioEnabled) {
             AppState.micMuted = true;
             const micBtn = document.getElementById('btnMic');
@@ -162,6 +168,7 @@ async function initiateCall() {
             videoTag.playsInline = true;
             videoTag.setAttribute('playsinline', 'true');
             videoTag.setAttribute('webkit-playsinline', 'true');
+            videoTag.setAttribute('muted', '');
             videoTag.muted = true;
             videoTag.controls = false;
             videoTag.style.position = 'relative';
