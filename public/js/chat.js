@@ -10,6 +10,54 @@ export function initChatEngine() {
     if (!countdownTimer) {
         countdownTimer = setInterval(tickCountdowns, 1000);
     }
+
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+            syncDrawerToViewport();
+            scrollChatToBottom();
+        });
+        window.visualViewport.addEventListener('scroll', () => {
+            syncDrawerToViewport();
+        });
+    }
+
+    const input = document.getElementById('chatInput');
+    if (input) {
+        input.addEventListener('focus', () => {
+            setTimeout(() => {
+                syncDrawerToViewport();
+                scrollChatToBottom();
+            }, 100);
+        });
+    }
+}
+
+function syncDrawerToViewport() {
+    const drawer = document.getElementById('chatDrawer');
+    if (!drawer || !isChatOpen) return;
+
+    if (window.innerWidth <= 768 && window.visualViewport) {
+        const vv = window.visualViewport;
+        const isKeyboardOpen = vv.height < (window.innerHeight - 60);
+
+        drawer.classList.toggle('keyboard-open', isKeyboardOpen);
+
+        // Position drawer strictly within visualViewport bounds
+        drawer.style.position = 'fixed';
+        drawer.style.top = `${vv.offsetTop}px`;
+        drawer.style.left = `${vv.offsetLeft}px`;
+        drawer.style.width = `${vv.width}px`;
+        drawer.style.height = `${vv.height}px`;
+        drawer.style.bottom = 'auto';
+    } else {
+        drawer.classList.remove('keyboard-open');
+        drawer.style.position = '';
+        drawer.style.top = '';
+        drawer.style.left = '';
+        drawer.style.width = '';
+        drawer.style.height = '';
+        drawer.style.bottom = '';
+    }
 }
 
 export function toggleChat() {
@@ -23,9 +71,20 @@ export function toggleChat() {
     if (isChatOpen) {
         unreadCount = 0;
         if (badge) badge.style.display = 'none';
+
+        syncDrawerToViewport();
+
+        const isTouch = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 768;
         const input = document.getElementById('chatInput');
-        if (input) input.focus();
+        if (input && !isTouch) {
+            input.focus();
+        }
+
         scrollChatToBottom();
+    } else {
+        const input = document.getElementById('chatInput');
+        if (input) input.blur();
+        drawer.classList.remove('keyboard-open');
     }
 }
 
@@ -127,7 +186,6 @@ export function handleFileUpload(e) {
     xhr.send(formData);
 }
 
-// Formats message text: sanitizes XSS, auto-links URLs, and embeds inline images/GIFs
 function formatMessageContent(rawText) {
     const escaped = escapeHtml(rawText);
     const urlRegex = /(https?:\/\/[^\s<]+)/gi;
@@ -137,7 +195,7 @@ function formatMessageContent(rawText) {
         const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link">${url}</a>`;
         
         if (isImage) {
-            return `${linkHtml}<div class="chat-img-wrap"><img src="${url}" alt="image preview" class="chat-img-preview" loading="lazy" onload="window.scrollChatBottom && window.scrollChatBottom()" /></div>`;
+            return `${linkHtml}<div class="chat-img-wrap"><img src="${url}" alt="preview" class="chat-img-preview" loading="lazy" onload="window.scrollChatBottom && window.scrollChatBottom()" /></div>`;
         }
         return linkHtml;
     }).replace(/\n/g, '<br>');
@@ -250,9 +308,10 @@ function tickCountdowns() {
 export function scrollChatToBottom() {
     const stream = document.getElementById('chatStream');
     if (stream) {
+        stream.scrollTop = stream.scrollHeight;
         setTimeout(() => {
             stream.scrollTop = stream.scrollHeight;
-        }, 20);
+        }, 50);
     }
 }
 window.scrollChatBottom = scrollChatToBottom;
