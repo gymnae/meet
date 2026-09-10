@@ -1,4 +1,4 @@
-import { AppState, videoCaptureProfile } from './state.js';
+import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
 
@@ -475,9 +475,10 @@ export async function toggleCam() {
                             AppState.preWarmedTracks = AppState.preWarmedTracks.filter(t => { if (t.kind === 'video') { t.stop(); return false; } return true; });
                             await new Promise(resolve => setTimeout(resolve, 100));
 
+                            // === RESOLUTION PROFILER APPLIED HERE ===
                             const newLensTrack = await LivekitClient.createLocalVideoTrack({
                                 deviceId: device.id,
-                                resolution: { width: { ideal: 2560 }, height: { ideal: 1440 } }
+                                resolution: getResolutionProfile(device.name)
                             });
                             
                             const localTile = ensureParticipantTile(AppState.activeRoom.localParticipant, 'camera');
