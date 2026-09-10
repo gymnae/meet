@@ -1,4 +1,4 @@
-import { AppState, videoCaptureProfile } from './state.js';
+import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
 import { copyShareLink, toggleFullscreen, recalculateLayout, applyDynamicMirrorEffect } from './ui.js';
 import { 
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
@@ -121,10 +121,15 @@ async function initiateCall() {
         AppState.currentPublishedCodec = AppState.localPreferredCodec;
         AppState.participantPreferences = new Map();
 
+        // === INITIAL RESOLUTION PROFILE CONFIGURED HERE ===
+        const initialVideoProfile = {
+            resolution: getResolutionProfile()
+        };
+
         AppState.activeRoom = new LivekitClient.Room({
             adaptiveStream: true, 
             dynacast: true,
-            videoCaptureDefaults: videoCaptureProfile,
+            videoCaptureDefaults: initialVideoProfile,
             audioCaptureDefaults: audioConstraints,
             publishDefaults: { 
                 simulcast: true, 
@@ -140,7 +145,7 @@ async function initiateCall() {
         try {
             AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ 
                 audio: audioConstraints, 
-                video: videoCaptureProfile 
+                video: initialVideoProfile 
             });
         } catch (hwErr) {
             console.warn("[Hardware] Failed both, trying audio-only...", hwErr);
@@ -151,7 +156,7 @@ async function initiateCall() {
             } catch (audioErr) {
                 console.warn("[Hardware] Failed audio-only, trying video-only...", audioErr);
                 try {
-                    AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ video: videoCaptureProfile });
+                    AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ video: initialVideoProfile });
                     audioEnabled = false;
                     alert("Microphone not found or blocked. Joining with video only.");
                 } catch (videoErr) {
@@ -265,7 +270,6 @@ async function initiateCall() {
         checkMassMuteRules();
         recalculateLayout();
 
-        // Sync active room transmissions (messages <60s, files <10m)
         await syncRoomTransmissions(roomName);
 
     } catch (err) {
