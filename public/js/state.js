@@ -16,6 +16,32 @@ export const AppState = {
     handRaised: false
 };
 
+export const isIOS = () => {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+export function getResolutionProfile(deviceLabel = '') {
+    const label = deviceLabel.toLowerCase();
+    const isFront = label.includes('front') || label.includes('vorder') || label.includes('facetime');
+
+    // iOS Front Camera: Standard 1080p maintains hardware ISP binned pipeline for Portrait Mode
+    if (isIOS() && (isFront || label === '')) {
+        return {
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
+            frameRate: { ideal: 30, max: 30 }
+        };
+    }
+
+    // Desktops, rear lenses, and external USB webcams (Logitech Brio, Elgato Cam Link, etc.)
+    return {
+        width: { ideal: 2560 },
+        height: { ideal: 1440 },
+        frameRate: { ideal: 30 }
+    };
+}
+
 export const videoCaptureProfile = {
     resolution: {
         width: { ideal: 2560, max: 2560 },
