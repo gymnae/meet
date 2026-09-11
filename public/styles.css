@@ -21,6 +21,9 @@ body {
 
 /* === 80s/90s GATEWAY CONNECTION BOX === */
 .setup-box { background: #121324; padding: 30px; border-radius: 4px; text-align: center; width: 280px; box-shadow: 0 0 20px rgba(255, 0, 127, 0.5), inset 0 0 10px rgba(0, 240, 255, 0.2); margin: auto; border: 2px solid #ff007f; }
+.repo-link { display: inline-flex; justify-content: center; align-items: center; margin-top: 10px; color: #00f0ff; transition: color 0.15s ease, transform 0.15s ease; }
+.repo-link svg { width: 28px; height: 28px; fill: currentColor; }
+.repo-link:hover { color: #ff007f; transform: scale(1.08); }
 input { padding: 12px; width: 100%; border-radius: 2px; border: 1px solid #00f0ff; background: #1b1c3a; color: #00f0ff; font-size: 16px; margin-bottom: 15px; outline: none; text-shadow: 0 0 5px rgba(0, 240, 255, 0.5); -webkit-appearance: none; }
 input:focus { border-color: #ff007f; box-shadow: 0 0 10px rgba(255, 0, 127, 0.6); }
 .primary-btn { width: 100%; padding: 12px; background: #ff007f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 0 5px #fff; box-shadow: 0 0 10px #ff007f; }
