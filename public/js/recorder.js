@@ -51,7 +51,9 @@ function pickMimeType() {
         'video/webm',
         'video/mp4'
     ];
-    return candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
+    const picked = candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
+    console.log('[Recorder] MIME:', picked || '(browser default)');
+    return picked;
 }
 
 async function startRecording() {
@@ -142,19 +144,26 @@ async function startRecording() {
             2_500_000
         ), 12_000_000);
 
-        const recorder = new MediaRecorder(canvasStream, {
-            mimeType,
-            videoBitsPerSecond: bitrate
-        });
+        const options = { videoBitsPerSecond: bitrate };
+        if (mimeType) options.mimeType = mimeType;
+
+        const recorder = new MediaRecorder(canvasStream, options);
 
         // Closure-local state per session: never shared with the next recording
         const chunks = [];
         const startTime = Date.now();
 
         recorder.ondataavailable = (e) => {
+            console.log('[Recorder] chunk:', e.data?.size ?? 0, 'bytes');
             if (e.data && e.data.size > 0) chunks.push(e.data);
         };
-        recorder.onstop = () => handleRecordingStopped(recorder, chunks, startTime);
+        recorder.onerror = (e) => {
+            console.error('[Recorder] MediaRecorder error:', e.error || e);
+        };
+        recorder.onstop = () => {
+            console.log('[Recorder] stopped, total chunks:', chunks.length);
+            handleRecordingStopped(recorder, chunks, startTime);
+        };
 
         recorder.start(500); // collect in 500ms chunks so data flows steadily
         mediaRecorder = recorder;
