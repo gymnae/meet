@@ -10,8 +10,8 @@ import { renderFile, renderMessage, scrollChatToBottom, renderSystemNote } from 
 let mediaRecorder = null;
 let drawTimer = null;
 let audioCtx = null;
-let recStartTime = 0;
 let recStarting = false;
+let currentRecNoticeId = null;
 
 export function isRecordingSupported() {
     const isDesktop = window.matchMedia('(pointer: fine)').matches && window.innerWidth > 768;
@@ -158,7 +158,6 @@ async function startRecording() {
 
         recorder.start(500); // collect in 500ms chunks so data flows steadily
         mediaRecorder = recorder;
-        recStartTime = startTime;
 
         // Button keeps the "Rec" label — active color scheme signals recording
         if (btn) btn.classList.add('active-off');
@@ -182,24 +181,35 @@ function broadcastRecordingNotice() {
         created_at: Date.now(),
         pinned: true
     };
+    currentRecNoticeId = msg.id;
     renderMessage(msg, true);
     sendDataPacket({ type: 'CHAT_MESSAGE', payload: msg });
     scrollChatToBottom();
 }
 
+function removeRecordingNotice() {
+    if (!currentRecNoticeId) return;
+    document.getElementById(`msg_${currentRecNoticeId}`)?.remove();
+    sendDataPacket({ type: 'CHAT_MESSAGE_REMOVE', id: currentRecNoticeId });
+    currentRecNoticeId = null;
+}
+
 function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
+    // Detach the module reference FIRST so cleanup in onstop never re-stops it
+    const recorder = mediaRecorder;
+    mediaRecorder = null;
+    if (recorder && recorder.state !== 'inactive') {
+        recorder.stop(); // async: ondataavailable -> onstop -> handleRecordingStopped
+    } else {
+        cleanupRecording();
+        resetRecButton();
+        removeRecordingNotice();
     }
 }
 
 function cleanupRecording() {
     if (drawTimer) { clearInterval(drawTimer); drawTimer = null; }
     if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        try { mediaRecorder.stop(); } catch (e) {}
-    }
-    mediaRecorder = null;
 }
 
 async function handleRecordingStopped(recorder, chunks, startTime) {
@@ -207,6 +217,7 @@ async function handleRecordingStopped(recorder, chunks, startTime) {
     const type = recorder.mimeType || 'video/webm';
     cleanupRecording();
     resetRecButton();
+    removeRecordingNotice();
 
     const blob = new Blob(chunks, { type });
 

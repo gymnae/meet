@@ -167,6 +167,8 @@ export function handleIncomingDataPacket(payload, participant) {
             evaluateAndNegotiateCodec();
         } else if (data.type === 'CHAT_MESSAGE') {
             renderMessage(data.payload, false);
+        } else if (data.type === 'CHAT_MESSAGE_REMOVE') {
+            document.getElementById(`msg_${data.id}`)?.remove();
         } else if (data.type === 'FILE_SHARED') {
             renderFile(data.payload, false);
         }
