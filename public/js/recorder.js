@@ -1,6 +1,6 @@
 import { AppState } from './state.js';
 import { sendDataPacket } from './livekit-handler.js';
-import { renderFile, scrollChatToBottom, renderSystemNote } from './chat.js';
+import { renderFile, renderMessage, scrollChatToBottom, renderSystemNote } from './chat.js';
 
 // === CLIENT-SIDE COMPOSITE RECORDER (Desktop-only entry point) ===
 // Records only the local view: composites existing <video> elements onto a
@@ -8,10 +8,10 @@ import { renderFile, scrollChatToBottom, renderSystemNote } from './chat.js';
 // Zero impact on other participants: nothing is re-encoded or re-published.
 
 let mediaRecorder = null;
-let recordedChunks = [];
 let drawTimer = null;
 let audioCtx = null;
 let recStartTime = 0;
+let recStarting = false;
 
 export function isRecordingSupported() {
     const isDesktop = window.matchMedia('(pointer: fine)').matches && window.innerWidth > 768;
@@ -57,8 +57,8 @@ function pickMimeType() {
 async function startRecording() {
     const btn = document.getElementById('btnRec');
     // Guard against re-entry while a previous recorder is shutting down
-    if (mediaRecorder || drawTimer || audioCtx) cleanupRecording();
-    resetRecButton();
+    if (recStarting || mediaRecorder) return;
+    recStarting = true;
 
     try {
         const grid = document.getElementById('videoGrid');
@@ -142,29 +142,49 @@ async function startRecording() {
             2_500_000
         ), 12_000_000);
 
-        mediaRecorder = new MediaRecorder(canvasStream, {
+        const recorder = new MediaRecorder(canvasStream, {
             mimeType,
             videoBitsPerSecond: bitrate
         });
 
-        recordedChunks = [];
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-        };
-        mediaRecorder.onstop = handleRecordingStopped;
+        // Closure-local state per session: never shared with the next recording
+        const chunks = [];
+        const startTime = Date.now();
 
-        mediaRecorder.start(1000); // collect in 1s chunks
-        recStartTime = Date.now();
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onstop = () => handleRecordingStopped(recorder, chunks, startTime);
+
+        recorder.start(500); // collect in 500ms chunks so data flows steadily
+        mediaRecorder = recorder;
+        recStartTime = startTime;
 
         // Button keeps the "Rec" label — active color scheme signals recording
         if (btn) btn.classList.add('active-off');
-        renderSystemNote('🔴 Recording started — everything you see is being captured.');
+        broadcastRecordingNotice();
     } catch (err) {
         console.error('[Recorder] Start failed:', err);
         cleanupRecording();
         resetRecButton();
         renderSystemNote('⚠️ Recording is not supported on this device/browser.');
+    } finally {
+        recStarting = false;
     }
+}
+
+function broadcastRecordingNotice() {
+    const sender = localStorage.getItem('portal_username') || 'You';
+    const msg = {
+        id: `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        sender,
+        text: '🔴 started a recording — everything visible is being captured.',
+        created_at: Date.now(),
+        pinned: true
+    };
+    renderMessage(msg, true);
+    sendDataPacket({ type: 'CHAT_MESSAGE', payload: msg });
+    scrollChatToBottom();
 }
 
 function stopRecording() {
@@ -176,18 +196,19 @@ function stopRecording() {
 function cleanupRecording() {
     if (drawTimer) { clearInterval(drawTimer); drawTimer = null; }
     if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try { mediaRecorder.stop(); } catch (e) {}
+    }
     mediaRecorder = null;
 }
 
-async function handleRecordingStopped() {
+async function handleRecordingStopped(recorder, chunks, startTime) {
+    const durationSec = Math.round((Date.now() - startTime) / 1000);
+    const type = recorder.mimeType || 'video/webm';
+    cleanupRecording();
     resetRecButton();
 
-    const durationSec = Math.round((Date.now() - recStartTime) / 1000);
-    const type = mediaRecorder?.mimeType || 'video/webm';
-    cleanupRecording();
-
-    const blob = new Blob(recordedChunks, { type });
-    recordedChunks = [];
+    const blob = new Blob(chunks, { type });
 
     if (blob.size === 0) {
         renderSystemNote('⚠️ Recording was empty.');

@@ -221,12 +221,14 @@ export function renderMessage(msg, isSelfSent) {
     el.id = `msg_${msg.id}`;
     el.className = `chat-bubble ${isSelf ? 'self' : ''}`;
     el.dataset.created = msg.created_at;
-    el.dataset.type = 'chat';
+    // Pinned messages (e.g. recording notices) never expire
+    el.dataset.type = msg.pinned ? 'pinned' : 'chat';
+    if (msg.pinned) el.classList.add('pinned');
 
     el.innerHTML = `
         <div class="bubble-meta">
             <span class="sender-name">${escapeHtml(msg.sender)}</span>
-            <span class="ttl-pill">⏳ 60s</span>
+            <span class="ttl-pill">${msg.pinned ? '📌 pinned' : '⏳ 60s'}</span>
         </div>
         <div class="chat-body">${formatMessageContent(msg.text)}</div>
     `;
