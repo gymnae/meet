@@ -1,6 +1,6 @@
 import { AppState } from './state.js';
 import { sendDataPacket } from './livekit-handler.js';
-import { renderFile, scrollChatToBottom } from './chat.js';
+import { renderFile, scrollChatToBottom, renderSystemNote } from './chat.js';
 
 // === CLIENT-SIDE COMPOSITE RECORDER (Desktop-only entry point) ===
 // Records only the local view: composites existing <video> elements onto a
@@ -36,6 +36,14 @@ export async function toggleRecording() {
     await startRecording();
 }
 
+function resetRecButton() {
+    const btn = document.getElementById('btnRec');
+    if (btn) {
+        btn.innerText = 'Rec';
+        btn.classList.remove('active-off');
+    }
+}
+
 function pickMimeType() {
     const candidates = [
         'video/webm;codecs=vp9,opus',
@@ -48,6 +56,10 @@ function pickMimeType() {
 
 async function startRecording() {
     const btn = document.getElementById('btnRec');
+    // Guard against re-entry while a previous recorder is shutting down
+    if (mediaRecorder || drawTimer || audioCtx) cleanupRecording();
+    resetRecButton();
+
     try {
         const grid = document.getElementById('videoGrid');
         // Match the recording to what is currently visible: canvas mirrors the
@@ -144,15 +156,14 @@ async function startRecording() {
         mediaRecorder.start(1000); // collect in 1s chunks
         recStartTime = Date.now();
 
-        if (btn) {
-            btn.innerText = 'Stop';
-            btn.classList.add('active-off');
-        }
+        // Button keeps the "Rec" label — active color scheme signals recording
+        if (btn) btn.classList.add('active-off');
+        renderSystemNote('🔴 Recording started — everything you see is being captured.');
     } catch (err) {
         console.error('[Recorder] Start failed:', err);
         cleanupRecording();
-        if (btn) { btn.innerText = 'Rec'; btn.classList.remove('active-off'); }
-        alert('Recording is not supported on this device/browser.');
+        resetRecButton();
+        renderSystemNote('⚠️ Recording is not supported on this device/browser.');
     }
 }
 
@@ -169,8 +180,7 @@ function cleanupRecording() {
 }
 
 async function handleRecordingStopped() {
-    const btn = document.getElementById('btnRec');
-    if (btn) { btn.innerText = 'Rec'; btn.classList.remove('active-off'); }
+    resetRecButton();
 
     const durationSec = Math.round((Date.now() - recStartTime) / 1000);
     const type = mediaRecorder?.mimeType || 'video/webm';
@@ -179,7 +189,13 @@ async function handleRecordingStopped() {
     const blob = new Blob(recordedChunks, { type });
     recordedChunks = [];
 
-    if (blob.size === 0) return;
+    if (blob.size === 0) {
+        renderSystemNote('⚠️ Recording was empty.');
+        return;
+    }
+
+    const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+    renderSystemNote(`⏳ Recording stopped (${durationSec}s, ${sizeMB} MB) — preparing upload…`);
 
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -204,11 +220,14 @@ async function handleRecordingStopped() {
                 const savedFile = await res.json();
                 renderFile(savedFile, true);
                 sendDataPacket({ type: 'FILE_SHARED', payload: savedFile });
+                renderSystemNote('✅ Recording shared to chat.');
                 scrollChatToBottom();
                 return;
             }
+            renderSystemNote('⚠️ Upload failed — downloading locally instead.');
         } catch (err) {
             console.error('[Recorder] Chat share failed, falling back to local download:', err);
+            renderSystemNote('⚠️ Upload failed — downloading locally instead.');
         }
     }
 

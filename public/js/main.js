@@ -109,6 +109,8 @@ async function initiateCall() {
         window.location.hash = encodeURIComponent(roomName);
 
         document.getElementById('loginSetup').style.display = 'none';
+        const repoLink = document.getElementById('repoLink');
+        if (repoLink) repoLink.style.display = 'none';
         document.getElementById('room-header').style.display = 'flex';
         document.getElementById('video-container').style.display = 'flex';
         document.getElementById('control-dock').style.display = 'flex';

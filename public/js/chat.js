@@ -314,6 +314,23 @@ function tickCountdowns() {
     });
 }
 
+// Transient system note (e.g. recording status) — local-only, not broadcast
+export function renderSystemNote(text) {
+    const stream = document.getElementById('chatStream');
+    if (!stream) return;
+
+    const el = document.createElement('div');
+    el.className = 'chat-system-note';
+    el.textContent = text;
+    stream.appendChild(el);
+    scrollChatToBottom();
+
+    setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 400);
+    }, 8000);
+}
+
 export function scrollChatToBottom() {
     const stream = document.getElementById('chatStream');
     if (stream) {

@@ -120,6 +120,12 @@ function createGutterHandle() {
 function applySidebarWidth(px) {
     sidebarWidth = px;
     document.documentElement.style.setProperty('--sidebar-w', `${px}px`);
+    // recalculateLayout() already wrote an inline gridTemplateColumns with the
+    // old resolved value — override it directly so drags resize immediately.
+    const grid = document.getElementById('videoGrid');
+    if (grid && grid.classList.contains('has-maximized') && window.innerWidth > 768) {
+        grid.style.gridTemplateColumns = `minmax(0, 1fr) ${px}px`;
+    }
     positionGutter();
 }
 
