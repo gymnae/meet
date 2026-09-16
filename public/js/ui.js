@@ -87,7 +87,7 @@ export function applyDynamicMirrorEffect(videoTrackInstance) {
 export function recalculateLayout() {
     const grid = document.getElementById('videoGrid');
     if (!grid) return;
-    
+
     const rawTiles = Array.from(grid.querySelectorAll('.video-tile')); 
     let targetMaximizeId = null;
 
@@ -98,6 +98,7 @@ export function recalculateLayout() {
     }
 
     const isMobile = window.innerWidth <= 768;
+    const sidebarW = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w').trim() || '200px';
 
     // Reset base border colors and glow
     rawTiles.forEach(tile => {
@@ -120,7 +121,7 @@ export function recalculateLayout() {
         const sidebarCount = Math.max(1, gridTiles.length - 1);
         
         if (!isMobile) {
-            grid.style.gridTemplateColumns = 'minmax(0, 1fr) 200px';
+            grid.style.gridTemplateColumns = `minmax(0, 1fr) ${sidebarW}`;
             grid.style.gridTemplateRows = `repeat(${sidebarCount}, minmax(0, 1fr))`;
         } else {
             grid.style.gridTemplateColumns = `repeat(${sidebarCount}, minmax(0, 1fr))`;
@@ -212,6 +213,9 @@ export function recalculateLayout() {
             }
         }
     }
+
+    // Keep resize handles/gutter in sync (dynamic import avoids circular deps)
+    import('./resize.js').then(m => m.syncResizeAfterLayout()).catch(() => {});
 }
 
 export function triggerFloatingEmoji(tileId, emoji) {

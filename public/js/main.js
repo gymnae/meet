@@ -7,6 +7,8 @@ import {
     broadcastCodecPreference, evaluateAndNegotiateCodec
 } from './livekit-handler.js';
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
+import { initTileResize } from './resize.js';
+import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
 
 window.initiateCall = initiateCall;
 window.toggleMic = toggleMic;
@@ -19,9 +21,13 @@ window.terminateSession = terminateSession;
 window.copyShareLink = copyShareLink;
 window.handleChatSubmit = handleChatSubmit;
 window.handleFileUpload = handleFileUpload;
+window.toggleRecording = toggleRecording;
 
 window.addEventListener('DOMContentLoaded', () => {
     initChatEngine();
+    initTileResize();
+    initRecorderButton();
+    window.addEventListener('resize', initRecorderButton);
 
     const savedName = localStorage.getItem('portal_username');
     if (savedName) document.getElementById('nameInput').value = savedName;

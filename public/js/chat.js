@@ -1,6 +1,6 @@
 import { AppState } from './state.js';
 import { sendDataPacket } from './livekit-handler.js';
-import { playSynthSound } from './ui.js';
+import { playSynthSound, recalculateLayout } from './ui.js';
 
 let isChatOpen = false;
 let unreadCount = 0;
@@ -42,13 +42,20 @@ function syncDrawerToViewport() {
 
         drawer.classList.toggle('keyboard-open', isKeyboardOpen);
 
-        // Position drawer strictly within visualViewport bounds
+        // Bottom sheet: keep videos visible above the drawer.
+        // When the keyboard opens, the sheet tracks the visualViewport top.
         drawer.style.position = 'fixed';
-        drawer.style.top = `${vv.offsetTop}px`;
         drawer.style.left = `${vv.offsetLeft}px`;
         drawer.style.width = `${vv.width}px`;
-        drawer.style.height = `${vv.height}px`;
-        drawer.style.bottom = 'auto';
+        if (isKeyboardOpen) {
+            drawer.style.top = `${vv.offsetTop}px`;
+            drawer.style.height = `${vv.height}px`;
+            drawer.style.bottom = 'auto';
+        } else {
+            drawer.style.top = 'auto';
+            drawer.style.height = '55dvh';
+            drawer.style.bottom = '0';
+        }
     } else {
         drawer.classList.remove('keyboard-open');
         drawer.style.position = '';
@@ -67,6 +74,7 @@ export function toggleChat() {
 
     isChatOpen = !isChatOpen;
     drawer.style.display = isChatOpen ? 'flex' : 'none';
+    document.body.classList.toggle('chat-open', isChatOpen);
 
     if (isChatOpen) {
         unreadCount = 0;
@@ -86,6 +94,7 @@ export function toggleChat() {
         if (input) input.blur();
         drawer.classList.remove('keyboard-open');
     }
+    recalculateLayout();
 }
 
 export async function syncRoomTransmissions(roomName) {
