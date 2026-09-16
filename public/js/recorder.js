@@ -82,35 +82,8 @@ async function startRecording() {
 
         const REC_FPS = 30;
 
-        // Mix local + remote audio from existing elements/tracks
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const audioDest = audioCtx.createMediaStreamDestination();
-        let audioSources = 0;
-
-        const seenTracks = new Set();
-        const attachStream = (stream) => {
-            if (!stream) return;
-            stream.getAudioTracks().forEach(t => {
-                if (seenTracks.has(t.id)) return;
-                seenTracks.add(t.id);
-                try {
-                    audioCtx.createMediaStreamSource(new MediaStream([t])).connect(audioDest);
-                    audioSources++;
-                } catch (e) {}
-            });
-        };
-
-        // Remote audio elements already attached to the DOM
-        document.querySelectorAll('audio').forEach(a => attachStream(a.srcObject));
-
-        // Local mic track
-        const micPub = AppState.activeRoom?.localParticipant?.getTrackPublication(LivekitClient.Track.Source.Microphone);
-        if (micPub?.audioTrack?.mediaStreamTrack && !AppState.micMuted) {
-            attachStream(new MediaStream([micPub.audioTrack.mediaStreamTrack]));
-        }
-
-        audioDest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
-
+        // Manual frame mode (0): paint first frame, then capture, then rAF loop.
+        // captureStream(0) + requestFrame() is immune to setInterval throttling.
         let canvasTrack = null;
         const drawFrame = () => {
             ctx.fillStyle = '#0a0b10';
@@ -143,8 +116,6 @@ async function startRecording() {
 
         // Paint the first frame BEFORE capturing so the stream has content
         drawFrame();
-
-        // Manual frame mode (0) + rAF loop: immune to setInterval throttling
         const canvasStream = canvas.captureStream(0);
         canvasTrack = canvasStream.getVideoTracks()[0];
 
@@ -154,6 +125,35 @@ async function startRecording() {
             drawTimer = requestAnimationFrame(loop);
         };
         drawTimer = requestAnimationFrame(loop);
+
+        // Mix local + remote audio from existing elements/tracks
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioDest = audioCtx.createMediaStreamDestination();
+        let audioSources = 0;
+
+        const seenTracks = new Set();
+        const attachStream = (stream) => {
+            if (!stream) return;
+            stream.getAudioTracks().forEach(t => {
+                if (seenTracks.has(t.id)) return;
+                seenTracks.add(t.id);
+                try {
+                    audioCtx.createMediaStreamSource(new MediaStream([t])).connect(audioDest);
+                    audioSources++;
+                } catch (e) {}
+            });
+        };
+
+        // Remote audio elements already attached to the DOM
+        document.querySelectorAll('audio').forEach(a => attachStream(a.srcObject));
+
+        // Local mic track
+        const micPub = AppState.activeRoom?.localParticipant?.getTrackPublication(LivekitClient.Track.Source.Microphone);
+        if (micPub?.audioTrack?.mediaStreamTrack && !AppState.micMuted) {
+            attachStream(new MediaStream([micPub.audioTrack.mediaStreamTrack]));
+        }
+
+        audioDest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
 
         const mimeType = pickMimeType();
         // Scale bitrate with pixel count (~0.15 bits/pixel/frame, clamped)
