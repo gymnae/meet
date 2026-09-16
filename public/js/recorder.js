@@ -82,15 +82,12 @@ async function startRecording() {
 
         const REC_FPS = 30;
 
-        // Manual frame mode (0): paint first frame, then capture, then rAF loop.
-        // captureStream(0) + requestFrame() is immune to setInterval throttling.
-        let canvasTrack = null;
         const drawFrame = () => {
             ctx.fillStyle = '#0a0b10';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             const videos = Array.from(document.querySelectorAll('#videoGrid video'))
-                .filter(v => v.videoWidth > 0 && v.videoHeight > 0);
+                .filter(v => v.videoWidth > 0 && v.videoHeight > 0 && v.readyState >= 2);
 
             if (videos.length > 0) {
                 const cols = Math.ceil(Math.sqrt(videos.length));
@@ -110,14 +107,15 @@ async function startRecording() {
                     try { ctx.drawImage(video, x, y, w, h); } catch (e) {}
                 });
             }
-            // Explicitly push the frame — captureStream(0) manual mode
-            if (canvasTrack && canvasTrack.requestFrame) canvasTrack.requestFrame();
         };
 
-        // Paint the first frame BEFORE capturing so the stream has content
+        // Paint the first frame BEFORE capturing — a canvas captured with no
+        // painted content yields a permanently empty stream in Chrome.
         drawFrame();
-        const canvasStream = canvas.captureStream(0);
-        canvasTrack = canvasStream.getVideoTracks()[0];
+
+        // Auto-capture at REC_FPS (cross-browser reliable path for Chrome AND
+        // Firefox); rAF drives the painting so frames keep flowing.
+        const canvasStream = canvas.captureStream(REC_FPS);
 
         const loop = () => {
             if (!drawTimer) return;
