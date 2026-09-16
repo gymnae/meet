@@ -9,6 +9,7 @@ import {
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
 import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
+import { initCapabilityChecks, refreshControlVisibility } from './capabilities.js';
 
 window.initiateCall = initiateCall;
 window.toggleMic = toggleMic;
@@ -27,6 +28,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initChatEngine();
     initTileResize();
     initRecorderButton();
+    initCapabilityChecks();
     window.addEventListener('resize', initRecorderButton);
 
     const savedName = localStorage.getItem('portal_username');
@@ -277,6 +279,9 @@ async function initiateCall() {
 
         checkMassMuteRules();
         recalculateLayout();
+
+        // Device access now granted — real device list available, re-evaluate
+        refreshControlVisibility();
 
         await syncRoomTransmissions(roomName);
 
