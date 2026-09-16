@@ -14,14 +14,19 @@ let recStarting = false;
 let currentRecNoticeId = null;
 
 export function isRecordingSupported() {
-    const isDesktop = window.matchMedia('(pointer: fine)').matches && window.innerWidth > 768;
-    return isDesktop && typeof MediaRecorder !== 'undefined' && !!HTMLCanvasElement.prototype.captureStream;
+    // Desktop heuristic: allow hybrid devices (touchscreen laptops) via hover too
+    const wideEnough = window.innerWidth > 768;
+    const hasFinePointer = window.matchMedia('(pointer: fine)').matches || window.matchMedia('(hover: hover)').matches;
+    const apiOk = typeof MediaRecorder !== 'undefined' && !!HTMLCanvasElement.prototype.captureStream;
+    return wideEnough && hasFinePointer && apiOk;
 }
 
 export function initRecorderButton() {
     const btn = document.getElementById('btnRec');
     if (!btn) return;
-    btn.style.display = isRecordingSupported() ? 'flex' : 'none';
+    const supported = isRecordingSupported();
+    btn.style.display = supported ? 'flex' : 'none';
+    console.log('[Recorder] supported:', supported);
 }
 
 export function isRecordingActive() {
@@ -29,6 +34,7 @@ export function isRecordingActive() {
 }
 
 export async function toggleRecording() {
+    console.log('[Recorder] toggle, active:', !!mediaRecorder);
     if (mediaRecorder) {
         stopRecording();
         return;
@@ -75,7 +81,6 @@ async function startRecording() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         const REC_FPS = 30;
-        const canvasStream = canvas.captureStream(REC_FPS);
 
         // Mix local + remote audio from existing elements/tracks
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -106,6 +111,7 @@ async function startRecording() {
 
         audioDest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
 
+        let canvasTrack = null;
         const drawFrame = () => {
             ctx.fillStyle = '#0a0b10';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -113,28 +119,41 @@ async function startRecording() {
             const videos = Array.from(document.querySelectorAll('#videoGrid video'))
                 .filter(v => v.videoWidth > 0 && v.videoHeight > 0);
 
-            if (videos.length === 0) return;
+            if (videos.length > 0) {
+                const cols = Math.ceil(Math.sqrt(videos.length));
+                const rows = Math.ceil(videos.length / cols);
+                const cellW = canvas.width / cols;
+                const cellH = canvas.height / rows;
 
-            const cols = Math.ceil(Math.sqrt(videos.length));
-            const rows = Math.ceil(videos.length / cols);
-            const cellW = canvas.width / cols;
-            const cellH = canvas.height / rows;
-
-            videos.forEach((video, i) => {
-                const col = i % cols;
-                const row = Math.floor(i / cols);
-                // Contain-fit each video inside its cell
-                const scale = Math.min(cellW / video.videoWidth, cellH / video.videoHeight);
-                const w = video.videoWidth * scale;
-                const h = video.videoHeight * scale;
-                const x = col * cellW + (cellW - w) / 2;
-                const y = row * cellH + (cellH - h) / 2;
-                try { ctx.drawImage(video, x, y, w, h); } catch (e) {}
-            });
+                videos.forEach((video, i) => {
+                    const col = i % cols;
+                    const row = Math.floor(i / cols);
+                    // Contain-fit each video inside its cell
+                    const scale = Math.min(cellW / video.videoWidth, cellH / video.videoHeight);
+                    const w = video.videoWidth * scale;
+                    const h = video.videoHeight * scale;
+                    const x = col * cellW + (cellW - w) / 2;
+                    const y = row * cellH + (cellH - h) / 2;
+                    try { ctx.drawImage(video, x, y, w, h); } catch (e) {}
+                });
+            }
+            // Explicitly push the frame — captureStream(0) manual mode
+            if (canvasTrack && canvasTrack.requestFrame) canvasTrack.requestFrame();
         };
 
+        // Paint the first frame BEFORE capturing so the stream has content
         drawFrame();
-        drawTimer = setInterval(drawFrame, 1000 / REC_FPS);
+
+        // Manual frame mode (0) + rAF loop: immune to setInterval throttling
+        const canvasStream = canvas.captureStream(0);
+        canvasTrack = canvasStream.getVideoTracks()[0];
+
+        const loop = () => {
+            if (!drawTimer) return;
+            drawFrame();
+            drawTimer = requestAnimationFrame(loop);
+        };
+        drawTimer = requestAnimationFrame(loop);
 
         const mimeType = pickMimeType();
         // Scale bitrate with pixel count (~0.15 bits/pixel/frame, clamped)
@@ -217,7 +236,7 @@ function stopRecording() {
 }
 
 function cleanupRecording() {
-    if (drawTimer) { clearInterval(drawTimer); drawTimer = null; }
+    if (drawTimer) { cancelAnimationFrame(drawTimer); drawTimer = null; }
     if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
 }
 
