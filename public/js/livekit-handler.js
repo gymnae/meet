@@ -569,6 +569,7 @@ export function cleanupAllTilesForParticipant(participantIdentity) {
 }
 
 export function terminateSession(shouldReload = true) {
+    document.body.classList.remove('in-session');
     AppState.preWarmedTracks.forEach(track => { try { track.stop(); } catch(e){} });
     AppState.preWarmedTracks = [];
     if (AppState.activeRoom) {

@@ -110,6 +110,7 @@ async function initiateCall() {
 
         window.location.hash = encodeURIComponent(roomName);
 
+        document.body.classList.add('in-session');
         document.getElementById('loginSetup').style.display = 'none';
         const repoLink = document.getElementById('repoLink');
         if (repoLink) repoLink.style.display = 'none';
