@@ -100,11 +100,11 @@ export function recalculateLayout() {
     const isMobile = window.innerWidth <= 768;
     const sidebarW = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w').trim() || '200px';
 
-    // Reset base border colors and glow
+    // Reset base border colors and glow (glass pastel)
     rawTiles.forEach(tile => {
         tile.classList.remove('maximized');
-        tile.style.borderColor = '#7b2cbf';
-        tile.style.boxShadow = '0 4px 10px rgba(123, 44, 191, 0.3)';
+        tile.style.borderColor = 'rgba(255,255,255,0.22)';
+        tile.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.35)';
     });
 
     if (targetMaximizeId) {
@@ -133,8 +133,8 @@ export function recalculateLayout() {
         gridTiles.forEach(tile => {
             if (tile.id === targetMaximizeId) {
                 tile.classList.add('maximized');
-                tile.style.borderColor = '#00f0ff';
-                tile.style.boxShadow = '0 0 25px rgba(0, 240, 255, 0.6)';
+                tile.style.borderColor = '#a4c3d4';
+                tile.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.25), 0 8px 32px rgba(164,195,212,0.35)';
                 if (!isMobile) {
                     tile.style.gridColumn = '1';
                     tile.style.gridRow = `1 / span ${sidebarCount}`;
@@ -189,7 +189,7 @@ export function recalculateLayout() {
 
     const localCameraTile = document.getElementById('tile_local_camera');
     if (localCameraTile && !localCameraTile.classList.contains('maximized')) {
-        localCameraTile.style.borderColor = '#ff007f';
+        localCameraTile.style.borderColor = 'rgba(226,160,180,0.6)';
     }
 
     // === ACTIVE SPEAKER HIGHLIGHT ENGINE (INCLUDING MAXIMIZED TILES) ===
@@ -200,16 +200,16 @@ export function recalculateLayout() {
 
         const speakerTile = document.getElementById(speakerTileId);
         if (speakerTile) {
-            speakerTile.style.borderColor = '#39ff14';
-            speakerTile.style.boxShadow = '0 0 15px rgba(57, 255, 20, 0.7)';
+            speakerTile.style.borderColor = '#a9cbb6';
+            speakerTile.style.boxShadow = '0 0 0 2px rgba(169,203,182,0.7), 0 8px 24px rgba(169,203,182,0.4)';
         }
 
-        // If the maximized view belongs to the speaker (camera or their presentation), light it up green
+        // If the maximized view belongs to the speaker (camera or their presentation), light it up mint
         if (targetMaximizeId && (targetMaximizeId === speakerTileId || targetMaximizeId === speakerScreenTileId)) {
             const maxTile = document.getElementById(targetMaximizeId);
             if (maxTile) {
-                maxTile.style.borderColor = '#39ff14';
-                maxTile.style.boxShadow = '0 0 35px rgba(57, 255, 20, 0.9)';
+                maxTile.style.borderColor = '#a9cbb6';
+                maxTile.style.boxShadow = '0 0 0 2px rgba(169,203,182,0.8), 0 8px 32px rgba(169,203,182,0.5)';
             }
         }
     }
