@@ -19,12 +19,13 @@
 #video-container{background:transparent;}
 .video-tile{background:rgba(17,18,34,.93);}
 
-/* full-height stack — always covers viewport, any aspect.
-   NOTE: no size-containment here; that collapsed flex children to 0. */
+/* TRUE DIAGONAL, resize-safe: overscan via negative insets (relative to
+   fixed .px-bg, so it tracks any viewport), rotated as one rigid sheet.
+   No vmax sizing, no size-containment — flex children keep real height. */
 .px-bands{
-  position:absolute; inset:0;
-  width:100%; height:100%;
+  position:absolute; inset:-25%;
   display:flex; flex-direction:column;
+  transform:rotate(-12deg);
 }
 .px-band{
   position:relative; flex:1 0 0; min-height:110px;
@@ -155,13 +156,23 @@
 /* dust removed for perf; keep one soft vignette, static */
 .px-fade{position:absolute; inset:0; z-index:7; background:radial-gradient(120% 95% at 50% 45%,transparent 55%,rgba(0,0,0,.55) 100%);}
 
-/* ---------- IN-SESSION: dim + slow, edges stay visible ---------- */
+/* Keep scene art upright while the sheet runs diagonal (static transform = free) */
+.px-scene{transform:rotate(12deg) scale(1.18);}
+
+/* ---------- IN-SESSION: bands ONLY in gutters, never behind content ----------
+   Main window = #video-container .grid + .video-tile (active speaker/content).
+   Tiles become fully opaque so no bleed-through; container stays transparent
+   so bands show in grid gaps, header/dock translucency and sidebar gutters. */
 body.in-session .px-bg{filter:saturate(.65) brightness(.62);}
 body.in-session .px-band__track{animation-duration:140s;}
 body.in-session .px-band--fast .px-band__track{animation-duration:110s;}
 body.in-session .px-band--slow .px-band__track{animation-duration:180s;}
 body.in-session .px-band:nth-child(2),body.in-session .px-band:nth-child(3),body.in-session .px-band:nth-child(4){opacity:.55;}
 body.in-session .sc-c .ball,body.in-session .sc-b .rings i{animation-play-state:paused;}
+body.in-session #video-container{background:transparent;}
+body.in-session .grid{background:transparent;}
+body.in-session .video-tile{background:#111222 !important;}
+body.in-session .avatar-placeholder{background:#0d0e1b;}
 
 @media (max-width:768px){
   .px-scene{width:260px; flex-basis:260px;}
