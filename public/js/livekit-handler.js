@@ -27,12 +27,15 @@ export function ensureParticipantTile(participant, streamSource = 'camera') {
             rawCleanName = participant.identity.split('_')[0];
         }
 
-        const initial = rawCleanName.charAt(0).toUpperCase();
+        let hash = 0;
+        const seed = `${participant.identity || rawCleanName}`;
+        for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+        const variant = hash % 6;
 
         tile.innerHTML = `
             <div class="touch-shield"></div>
             <div class="hand-badge">🖐️</div>
-            <div class="avatar-placeholder">${initial}</div>
+            <div class="avatar-placeholder av${variant}"><div class="cyber-avatar"><div class="ca-ear l"></div><div class="ca-ear r"></div><div class="ca-head"></div><div class="ca-hair"></div><div class="ca-visor"></div><div class="ca-body"></div></div></div>
             <div class="name-tag">${isScreenShare ? `${rawCleanName} (Screen)` : rawCleanName}</div>
         `;
         

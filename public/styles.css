@@ -105,8 +105,25 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
 /* Responsive Screen Share Viewport Fitting */
 .video-tile.screen-share video { object-fit: contain !important; background: #080912 !important; }
 
-/* Avatar Placeholders */
-.avatar-placeholder { position: absolute; width: 70px; height: 70px; max-width: 50%; max-height: 50%; aspect-ratio: 1; border-radius: 50%; background: #1b1c3a; border: 2px solid #ff007f; box-shadow: 0 0 15px rgba(255, 0, 127, 0.5); display: flex; justify-content: center; align-items: center; font-size: 28px; font-weight: bold; color: #00f0ff; text-shadow: 0 0 8px #00f0ff; z-index: 1; }
+/* Cyberpunk procedural avatars (CSS-only, name-tag stays) */
+.avatar-placeholder { position: absolute; width: 76px; height: 76px; max-width: 52%; max-height: 55%; aspect-ratio: 1; border-radius: 50%; background: #0d0e1b; border: 2px solid #ff007f; box-shadow: 0 0 15px rgba(255, 0, 127, 0.5); display: flex; justify-content: center; align-items: center; z-index: 1; overflow: hidden; }
+.avatar-placeholder::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 120%, var(--av-glow, rgba(0,240,255,.35)), transparent 60%), repeating-linear-gradient(to bottom, rgba(255,255,255,.06) 0 2px, transparent 2px 4px); }
+.avatar-placeholder.av0 { --av-c1:#ff007f; --av-c2:#00f0ff; --av-skin:#f2b88a; --av-glow:rgba(255,0,127,.4); }
+.avatar-placeholder.av1 { --av-c1:#00f0ff; --av-c2:#7b2cbf; --av-skin:#9aa3b2; --av-glow:rgba(0,240,255,.4); }
+.avatar-placeholder.av2 { --av-c1:#ffe600; --av-c2:#ff007f; --av-skin:#c98d5e; --av-glow:rgba(255,230,0,.35); }
+.avatar-placeholder.av3 { --av-c1:#39ff14; --av-c2:#00f0ff; --av-skin:#8a9bb0; --av-glow:rgba(57,255,20,.35); }
+.avatar-placeholder.av4 { --av-c1:#7b2cbf; --av-c2:#ff007f; --av-skin:#e8a17a; --av-glow:rgba(123,44,191,.5); }
+.avatar-placeholder.av5 { --av-c1:#00f0ff; --av-c2:#ffe600; --av-skin:#5b6472; --av-glow:rgba(0,240,255,.4); }
+.cyber-avatar { position: relative; width: 56%; height: 62%; image-rendering: pixelated; }
+.cyber-avatar .ca-head { position: absolute; left: 50%; top: 12%; width: 68%; height: 56%; transform: translateX(-50%); background: var(--av-skin); box-shadow: 0 0 0 3px #0a0b10; }
+.cyber-avatar .ca-hair { position: absolute; left: 50%; top: 0; width: 76%; height: 22%; transform: translateX(-50%); background: var(--av-c1); box-shadow: 0 0 0 3px #0a0b10, 0 0 12px var(--av-c1); }
+.cyber-avatar .ca-visor { position: absolute; left: 50%; top: 42%; width: 72%; height: 20%; transform: translateX(-50%); background: linear-gradient(90deg, var(--av-c1) 0 60%, #0a0b10 60% 70%, var(--av-c2) 70% 100%); border: 2px solid #0a0b10; box-shadow: 0 0 10px var(--av-c1); }
+.avatar-placeholder.av2 .ca-visor { border-radius: 50%; height: 26%; background: radial-gradient(circle at 30% 40%, var(--av-c2) 0 22%, #0a0b10 24% 100%); }
+.avatar-placeholder.av4 .ca-visor { clip-path: polygon(0 20%, 100% 0, 100% 100%, 0 80%); }
+.cyber-avatar .ca-body { position: absolute; left: 50%; bottom: 0; width: 84%; height: 30%; transform: translateX(-50%); background: linear-gradient(90deg, var(--av-c1) 0 22%, #1b1c3a 22% 78%, var(--av-c1) 78%); box-shadow: 0 0 0 3px #0a0b10; }
+.cyber-avatar .ca-body::after { content: ""; position: absolute; left: 50%; top: 28%; width: 8px; height: 8px; transform: translateX(-50%); background: var(--av-c2); box-shadow: 0 0 8px var(--av-c2); }
+.cyber-avatar .ca-ear { position: absolute; top: 34%; width: 8%; height: 14%; background: var(--av-c2); box-shadow: 0 0 0 2px #0a0b10; }
+.cyber-avatar .ca-ear.l { left: 12%; } .cyber-avatar .ca-ear.r { right: 12%; }
 
 /* Local Floating PiP Camera */
 #tile_local_camera { position: absolute !important; bottom: 15px !important; right: 15px !important; width: 160px !important; height: 120px !important; z-index: 2000 !important; border: 2px solid #ff007f !important; box-shadow: 0 0 15px #ff007f !important; border-radius: 4px !important; transform: translateZ(0) !important; }

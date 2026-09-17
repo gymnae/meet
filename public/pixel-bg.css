@@ -1,711 +1,249 @@
 /* ============================================================
-   CSS-ONLY CYBERPUNK PIXELART BACKGROUND
-   - Diagonal scroll (rotated track, seamless loop)
-   - 4 looping scenes: laptop / cyborg phone / cat / VR bar
-   - Palette matched to app: #0a0b10 #121324 #ff007f #00f0ff
-     #7b2cbf #1b1c3a #ffe600 #39ff14
-   - .in-session on <body> mutes it during a call
+   V2 — SEAMLESS CYBERPUNK PIXELART BANDS (CSS-only)
+   Login: 5 full-bleed diagonal bands tiled edge-to-edge.
+   Session (body.in-session): same bands dimmed/slowed, showing
+   through header/dock translucency + grid gaps + sidebar gaps.
+   Palette: #0a0b10 #121324 #1b1c3a #ff007f #00f0ff #7b2cbf #ffe600 #39ff14
+   Seamless trick: each .px-band__track holds EXACTLY 2 identical
+   .px-seq halves, no track gap → translateX(0 → -50%) loops clean.
    ============================================================ */
-
-.px-bg {
-  --pink: #ff007f;
-  --cyan: #00f0ff;
-  --purple: #7b2cbf;
-  --ink: #0a0b10;
-  --panel: #121324;
-  --panel2: #1b1c3a;
-  --yellow: #ffe600;
-  --green: #39ff14;
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
+.px-bg{
+  --pink:#ff007f; --cyan:#00f0ff; --purple:#7b2cbf; --ink:#0a0b10;
+  --panel:#121324; --panel2:#1b1c3a; --yellow:#ffe600; --green:#39ff14;
+  --band-h:19vh;
+  position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none;
   background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(123, 44, 191, 0.45), transparent 60%),
-    radial-gradient(1000px 500px at 90% 110%, rgba(255, 0, 127, 0.28), transparent 60%),
-    radial-gradient(900px 500px at 85% 0%, rgba(0, 240, 255, 0.18), transparent 60%),
+    radial-gradient(1100px 600px at 12% -10%, rgba(123,44,191,.5), transparent 60%),
+    radial-gradient(900px 500px at 95% 110%, rgba(255,0,127,.30), transparent 60%),
+    radial-gradient(800px 420px at 88% -6%, rgba(0,240,255,.20), transparent 60%),
     #0a0b10;
-  transition: opacity 0.6s ease, filter 0.6s ease;
+  transition:filter .6s ease;
 }
+.setup-box,.repo-link,#room-header,#video-container,#control-dock{position:relative;z-index:1;}
+.setup-box{background:rgba(18,19,36,.9);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
+#room-header,#control-dock{background:rgba(13,14,27,.82);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+#video-container{background:transparent;}
+.video-tile{background:rgba(17,18,34,.92);}
 
-/* keep app UI above background */
-.setup-box, .repo-link, #room-header, #video-container, #control-dock {
-  position: relative;
-  z-index: 1;
+/* oversized rotated stage so bands cover corners, no gaps */
+.px-bands{
+  position:absolute; top:50%; left:50%;
+  width:200vmax; height:200vmax;
+  transform:translate(-50%,-50%) rotate(-12deg);
+  display:flex; flex-direction:column; justify-content:stretch;
+  gap:0; padding:0;
 }
-.setup-box { background: rgba(18, 19, 36, 0.92); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-#room-header, #control-dock { background: rgba(13, 14, 27, 0.88); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-#video-container { background: transparent; }
+.px-band{flex:1 0 0; height:auto; min-height:0;}
+@media (max-width:768px){ .px-band{min-height:0;} }
+.px-band__track{min-width:100%;}
+.px-band{
+  position:relative; height:var(--band-h); min-height:132px;
+  overflow:hidden; flex:0 0 auto;
+  border-top:2px solid rgba(0,240,255,.55);
+  border-bottom:2px solid rgba(255,0,127,.55);
+  background:linear-gradient(180deg,#150f38 0%,#2b0f4e 34%,#8a1258 58%,#0d0e1b 100%);
+  box-shadow:0 0 24px rgba(123,44,191,.5), inset 0 0 40px rgba(0,0,0,.5);
+}
+.px-band:nth-child(odd){box-shadow:0 0 24px rgba(0,240,255,.35), inset 0 0 40px rgba(0,0,0,.5);}
+.px-band::after{ /* scanlines */
+  content:""; position:absolute; inset:0; z-index:5; pointer-events:none;
+  background:repeating-linear-gradient(to bottom, rgba(0,0,0,.20) 0 2px, transparent 2px 5px);
+}
+.px-band__track{display:flex; width:max-content; height:100%; animation:pxSlide 46s linear infinite; will-change:transform;}
+.px-band--rev .px-band__track{animation-direction:reverse;}
+.px-band--slow .px-band__track{animation-duration:64s;}
+.px-band--fast .px-band__track{animation-duration:36s;}
+@keyframes pxSlide{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+.px-seq{display:flex; height:100%;}
 
-/* --- perspective grid floor --- */
-.px-grid {
-  position: absolute;
-  left: -20%;
-  right: -20%;
-  bottom: -12%;
-  height: 46%;
-  background:
-    linear-gradient(transparent 0, rgba(0, 240, 255, 0.22) 2px, transparent 2px),
-    linear-gradient(90deg, transparent 0, rgba(255, 0, 127, 0.22) 2px, transparent 2px);
-  background-size: 44px 44px;
-  transform: perspective(520px) rotateX(62deg);
-  transform-origin: center bottom;
-  animation: gridPan 6s linear infinite;
-  mask-image: linear-gradient(to top, black 55%, transparent 95%);
-  -webkit-mask-image: linear-gradient(to top, black 55%, transparent 95%);
-  opacity: 0.7;
+/* ---------- scene tile ---------- */
+.px-scene{
+  position:relative; width:360px; height:100%; flex:0 0 360px;
+  overflow:hidden; image-rendering:pixelated;
+  border-right:4px solid rgba(10,11,16,.9);
+  background:linear-gradient(180deg,#160f3d 0%,#3a0f52 42%,#a3125a 66%,#0d0e1b 78%,#14162e 78%,#080912 100%);
 }
-@keyframes gridPan {
-  from { background-position: 0 0, 0 0; }
-  to { background-position: 0 44px, 0 0; }
-}
-
-/* --- diagonal scroller: rotate wrapper so horizontal loop reads as diagonal --- */
-.px-scroll {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 220vmax;
-  transform: translate(-50%, -50%) rotate(-14deg) scale(1.02);
-  transform-origin: center;
-}
-.px-track {
-  display: flex;
-  gap: 28px;
-  width: max-content;
-  padding: 10px 14px;
-  animation: diagScroll 70s linear infinite;
-}
-@keyframes diagScroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-/* second row drifting opposite for parallax diagonals */
-.px-scroll--back { opacity: 0.5; filter: saturate(0.85) brightness(0.8); }
-.px-scroll--back .px-track { animation-duration: 110s; animation-direction: reverse; }
-.px-scroll--front { margin-top: 0; }
-
-/* rows stacked vertically inside bg */
-.px-rows {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 26px;
-}
-
-/* --- scene card --- */
-.px-card {
-  position: relative;
-  width: 300px;
-  height: 200px;
-  flex: 0 0 auto;
-  background: #0d0e1b;
-  border: 2px solid var(--purple);
-  border-radius: 4px;
-  box-shadow: 0 0 18px rgba(123, 44, 191, 0.45), inset 0 0 24px rgba(0, 240, 255, 0.08);
-  overflow: hidden;
-  image-rendering: pixelated;
-}
-.px-card::after {
-  /* CRT scanlines inside card */
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.05) 0 1px, transparent 1px 3px);
-  pointer-events: none;
-}
-.px-card__label {
-  position: absolute;
-  left: 8px;
-  bottom: 6px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--cyan);
-  text-shadow: 0 0 6px var(--cyan);
-  z-index: 5;
-}
-.px-card__label i { font-style: normal; color: var(--pink); text-shadow: 0 0 6px var(--pink); }
-.px-sky {
-  position: absolute;
-  inset: 0 0 44px 0;
-  background:
-    linear-gradient(#ff007f 0 2px, transparent 2px) 20px 26px / 60px 2px no-repeat,
-    linear-gradient(#00f0ff 0 2px, transparent 2px) 180px 18px / 40px 2px no-repeat,
-    linear-gradient(180deg, #1b1040 0%, #3b0f4f 38%, #a3125a 62%, #0d0e1b 100%);
-}
-.px-sky::before {
-  /* pixel stars */
-  content: "";
-  position: absolute;
-  inset: 0;
+.px-scene::before{ /* stars */
+  content:""; position:absolute; left:0; right:0; top:0; height:52%;
   background-image:
-    radial-gradient(2px 2px at 20px 20px, #fff 50%, transparent 51%),
-    radial-gradient(2px 2px at 70px 44px, var(--cyan) 50%, transparent 51%),
-    radial-gradient(2px 2px at 140px 14px, #fff 50%, transparent 51%),
-    radial-gradient(2px 2px at 210px 36px, var(--yellow) 50%, transparent 51%),
-    radial-gradient(2px 2px at 250px 52px, var(--pink) 50%, transparent 51%);
-  animation: twinkle 2.4s steps(2) infinite;
+    radial-gradient(2px 2px at 22px 16px, #fff 50%, transparent 51%),
+    radial-gradient(2px 2px at 80px 34px, #00f0ff 50%, transparent 51%),
+    radial-gradient(2px 2px at 150px 12px, #fff 50%, transparent 51%),
+    radial-gradient(2px 2px at 230px 30px, #ffe600 50%, transparent 51%),
+    radial-gradient(2px 2px at 300px 20px, #ff007f 50%, transparent 51%),
+    radial-gradient(2px 2px at 190px 44px, #39ff14 50%, transparent 51%);
+  animation:pxTw 2.6s steps(2) infinite;
 }
-@keyframes twinkle { 50% { opacity: 0.45; } }
-.px-city {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 44px;
-  height: 52px;
+@keyframes pxTw{50%{opacity:.4;}}
+.px-cityline{
+  position:absolute; left:0; right:0; top:52%; height:26%;
   background:
-    linear-gradient(var(--cyan), var(--cyan)) 12px 18px / 3px 34px no-repeat,
-    linear-gradient(var(--pink), var(--pink)) 30px 8px / 18px 44px no-repeat,
-    linear-gradient(#0a0b10, #0a0b10) 30px 14px / 18px 6px no-repeat,
-    linear-gradient(var(--purple), var(--purple)) 58px 22px / 26px 30px no-repeat,
-    linear-gradient(var(--cyan), var(--cyan)) 94px 12px / 3px 40px no-repeat,
-    linear-gradient(#241b4d, #241b4d) 110px 18px / 34px 34px no-repeat,
-    linear-gradient(var(--pink), var(--pink)) 152px 26px / 22px 26px no-repeat,
-    linear-gradient(var(--purple), var(--purple)) 184px 10px / 16px 42px no-repeat,
-    linear-gradient(var(--cyan), var(--cyan)) 210px 20px / 28px 32px no-repeat,
-    linear-gradient(#0a0b10, #0a0b10) 0 46px / 100% 6px no-repeat;
-  opacity: 0.95;
+    linear-gradient(#00f0ff,#00f0ff) 10px 8px/4px 70% no-repeat,
+    linear-gradient(#ff007f,#b20059) 26px 2px/26px 92% no-repeat,
+    linear-gradient(#ffe600,#ffe600) 30px 12px/5px 5px no-repeat,
+    linear-gradient(#ffe600,#ffe600) 42px 26px/5px 5px no-repeat,
+    linear-gradient(#7b2cbf,#4a1a7a) 60px 12px/34px 80% no-repeat,
+    linear-gradient(#00f0ff,#00f0ff) 70px 20px/5px 5px no-repeat,
+    linear-gradient(#1b1c3a,#1b1c3a) 104px 8px/44px 84% no-repeat,
+    linear-gradient(#ff007f,#ff007f) 158px 20px/30px 72% no-repeat,
+    linear-gradient(#7b2cbf,#7b2cbf) 196px 4px/22px 88% no-repeat,
+    linear-gradient(#00f0ff,#00f0ff) 226px 14px/36px 78% no-repeat,
+    linear-gradient(#241b4d,#241b4d) 272px 10px/40px 82% no-repeat,
+    linear-gradient(#ffe600,#ffe600) 282px 22px/5px 5px no-repeat,
+    linear-gradient(#ff007f,#ff007f) 320px 16px/24px 76% no-repeat;
 }
-.px-city::after {
-  /* lit windows flicker */
-  content: "";
-  position: absolute;
-  inset: 0;
+.px-cityline::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(#00f0ff,#00f0ff) 200px 14px/5px 5px no-repeat,
+    linear-gradient(#ffe600,#ffe600) 64px 30px/5px 5px no-repeat,
+    linear-gradient(#ff007f,#ff007f) 324px 26px/5px 5px no-repeat;
+  animation:pxWin 3.4s steps(2) infinite;
+}
+@keyframes pxWin{0%,86%{opacity:1;}88%,92%{opacity:.15;}94%,100%{opacity:1;}}
+.px-ground{
+  position:absolute; left:0; right:0; bottom:0; height:22%;
   background:
-    linear-gradient(var(--yellow), var(--yellow)) 33px 20px / 4px 4px no-repeat,
-    linear-gradient(var(--yellow), var(--yellow)) 41px 30px / 4px 4px no-repeat,
-    linear-gradient(var(--cyan), var(--cyan)) 64px 28px / 4px 4px no-repeat,
-    linear-gradient(var(--cyan), var(--cyan)) 74px 36px / 4px 4px no-repeat,
-    linear-gradient(var(--pink), var(--pink)) 188px 18px / 4px 4px no-repeat;
-  animation: winFlicker 3.2s steps(2) infinite;
+    linear-gradient(rgba(0,240,255,.6),rgba(0,240,255,.6)) 0 0/100% 3px no-repeat,
+    repeating-linear-gradient(90deg, rgba(0,240,255,.35) 0 3px, transparent 3px 26px) 0 8px/100% 12px no-repeat,
+    linear-gradient(180deg,#1a1c38,#080912);
 }
-@keyframes winFlicker { 0%, 88% { opacity: 1; } 90%, 94% { opacity: 0.2; } 96%, 100% { opacity: 1; } }
-.px-floor {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 44px;
-  background:
-    linear-gradient(rgba(0,240,255,0.35), rgba(0,240,255,0.35)) 0 0 / 100% 2px no-repeat,
-    repeating-linear-gradient(90deg, rgba(0,240,255,0.25) 0 2px, transparent 2px 22px) 0 8px / 100% 10px no-repeat,
-    linear-gradient(180deg, #171933, #080912);
+/* actors sit on ground line */
+.px-actor{position:absolute; bottom:20%; z-index:3; animation:pxBob 1.6s steps(2) infinite;}
+@keyframes pxBob{50%{transform:translateY(-3px);}}
+.px-bubble{
+  position:absolute; z-index:4; font-size:10px; font-weight:900; letter-spacing:.5px;
+  background:#0d0e1b; border:2px solid var(--cyan); color:#fff; padding:3px 6px; border-radius:3px;
+  text-shadow:0 0 6px var(--cyan); box-shadow:0 0 10px rgba(0,240,255,.6);
+  animation:pxBob 1.6s steps(2) infinite;
 }
+.px-bubble::after{content:""; position:absolute; left:10px; bottom:-8px; width:8px; height:8px; background:inherit; border-right:2px solid var(--cyan); border-bottom:2px solid var(--cyan); transform:rotate(45deg);}
+.px-bubble.pink{border-color:var(--pink); text-shadow:0 0 6px var(--pink); box-shadow:0 0 10px rgba(255,0,127,.6);}
+.px-bubble.green{border-color:var(--green); text-shadow:0 0 6px var(--green); box-shadow:0 0 10px rgba(57,255,20,.5);}
 
-/* ============ SCENE 1: person at laptop ============ */
-.px-person {
-  position: absolute;
-  left: 108px;
-  bottom: 40px;
-  width: 44px;
-  height: 64px;
-  z-index: 3;
-  animation: bob 1.6s steps(2) infinite;
-}
-@keyframes bob { 50% { transform: translateY(-2px); } }
-.px-person .head {
-  position: absolute;
-  left: 10px;
-  top: 0;
-  width: 24px;
-  height: 22px;
-  background:
-    linear-gradient(#f2b88a, #f2b88a) 4px 4px / 16px 14px no-repeat,
-    linear-gradient(#2b1a12, #2b1a12) 0 0 / 24px 8px no-repeat,
-    linear-gradient(#0a0b10, #0a0b10) 4px 0 / 16px 4px no-repeat;
-  box-shadow: 0 0 0 2px #0a0b10;
-}
-.px-person .head::after {
-  content: "";
-  position: absolute;
-  left: 6px;
-  top: 10px;
-  width: 4px;
-  height: 4px;
-  background: #0a0b10;
-  box-shadow: 8px 0 0 #0a0b10;
-  animation: blink 4s steps(1) infinite;
-}
-@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 94%, 96% { transform: scaleY(0.1); } }
-.px-person .body {
-  position: absolute;
-  left: 6px;
-  top: 24px;
-  width: 32px;
-  height: 26px;
-  background:
-    linear-gradient(#ff007f, #b20059) 0 0 / 100% 100%;
-  box-shadow: 0 0 0 2px #0a0b10, 0 0 12px rgba(255,0,127,0.7);
-}
-.px-person .arm {
-  position: absolute;
-  top: 26px;
-  right: 34px;
-  width: 22px;
-  height: 8px;
-  background: #f2b88a;
-  box-shadow: 0 0 0 2px #0a0b10;
-  animation: type 0.5s steps(2) infinite;
-}
-@keyframes type { 50% { transform: translateY(2px); } }
-.px-laptop {
-  position: absolute;
-  left: 158px;
-  bottom: 40px;
-  width: 52px;
-  height: 36px;
-  z-index: 4;
-}
-.px-laptop .scr {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 48px;
-  height: 30px;
-  background:
-    linear-gradient(180deg, rgba(0,240,255,0.9), rgba(0,240,255,0.25)),
-    repeating-linear-gradient(0deg, #0a0b10 0 3px, transparent 3px 6px),
-    #0d2b33;
-  border: 2px solid #0a0b10;
-  box-shadow: 0 0 14px var(--cyan);
-  animation: screenFlicker 2s steps(2) infinite;
-}
-@keyframes screenFlicker { 50% { filter: brightness(1.25); } }
-.px-laptop .base {
-  position: absolute;
-  left: -4px;
-  bottom: 0;
-  width: 60px;
-  height: 8px;
-  background: #2b2d4a;
-  box-shadow: 0 0 0 2px #0a0b10;
-}
-.px-camdot {
-  position: absolute;
-  left: 22px;
-  top: 2px;
-  width: 4px;
-  height: 4px;
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
-  animation: twinkle 1.2s steps(2) infinite;
-}
+/* SCENE A — laptop caller: desk, lamp, coffee steam, screen faces, typing */
+.sc-a .desk{position:absolute; left:30px; right:30px; bottom:20%; height:14px; background:#3a1c5a; border:2px solid #0a0b10; z-index:2;}
+.sc-a .lamp{position:absolute; left:36px; bottom:calc(20% + 12px); width:10px; height:52px; background:#0a0b10; border:2px solid var(--yellow); z-index:2;}
+.sc-a .lamp::before{content:""; position:absolute; top:-14px; left:-12px; width:30px; height:12px; background:var(--yellow); box-shadow:0 0 16px var(--yellow);}
+.sc-a .lamp::after{content:""; position:absolute; top:2px; left:14px; width:60px; height:44px; background:linear-gradient(rgba(255,230,0,.22),transparent); clip-path:polygon(0 0,100% 100%,40% 100%);}
+.sc-a .person{left:120px;}
+.sc-a .person .hd{width:30px; height:26px; background:linear-gradient(#2b1a12,#2b1a12) 0 0/100% 9px no-repeat,linear-gradient(#f2b88a,#d89a6a) 4px 6px/22px 20px no-repeat; box-shadow:0 0 0 2px #0a0b10; position:relative;}
+.sc-a .person .hd::after{content:""; position:absolute; left:7px; top:14px; width:5px; height:5px; background:#0a0b10; box-shadow:10px 0 0 #0a0b10; animation:pxBlink 4s steps(1) infinite;}
+@keyframes pxBlink{0%,92%,100%{transform:scaleY(1);}94%,96%{transform:scaleY(.1);}}
+.sc-a .person .bd{width:40px; height:32px; margin-left:-5px; background:linear-gradient(180deg,#ff007f,#7a0c3e); box-shadow:0 0 0 2px #0a0b10,0 0 14px rgba(255,0,127,.8); position:relative;}
+.sc-a .person .bd::after{content:""; position:absolute; left:14px; top:10px; width:12px; height:8px; background:var(--cyan); box-shadow:0 0 8px var(--cyan);}
+.sc-a .arm{position:absolute; left:34px; top:36px; width:30px; height:9px; background:#f2b88a; box-shadow:0 0 0 2px #0a0b10; animation:pxType .45s steps(2) infinite;}
+@keyframes pxType{50%{transform:translateY(3px);}}
+.sc-a .laptop{position:absolute; left:196px; bottom:calc(20% + 14px); width:64px; height:44px; z-index:3;}
+.sc-a .laptop .scr{width:60px; height:38px; border:3px solid #0a0b10; background:linear-gradient(180deg,rgba(0,240,255,.95),rgba(0,240,255,.25)),repeating-linear-gradient(0deg,#0a0b10 0 3px,transparent 3px 6px),#0d2b33; box-shadow:0 0 16px var(--cyan); position:relative; animation:pxScr 2s steps(2) infinite;}
+@keyframes pxScr{50%{filter:brightness(1.3);}}
+.sc-a .laptop .scr::before{content:""; position:absolute; left:6px; top:8px; width:16px; height:12px; background:var(--pink); box-shadow:24px 4px 0 var(--green),8px 18px 0 2px rgba(255,255,255,.7);}
+.sc-a .laptop .scr::after{content:""; position:absolute; left:26px; top:2px; width:5px; height:5px; background:var(--green); box-shadow:0 0 8px var(--green); animation:pxTw 1s steps(2) infinite;}
+.sc-a .laptop .base{width:72px; height:9px; margin-left:-4px; background:#2b2d4a; box-shadow:0 0 0 2px #0a0b10;}
+.sc-a .mug{position:absolute; left:276px; bottom:calc(20% + 14px); width:16px; height:20px; background:var(--cyan); box-shadow:0 0 0 2px #0a0b10,0 0 10px var(--cyan); z-index:3;}
+.sc-a .mug::before{content:"~"; position:absolute; top:-18px; left:2px; color:#fff; opacity:.8; animation:pxSteam 1.8s ease-in-out infinite alternate;}
+@keyframes pxSteam{to{transform:translateY(-4px); opacity:.2;}}
+.sc-a .bubble1{left:96px; bottom:64%;}
+.sc-a .bubble2{left:206px; bottom:72%; font-size:9px;}
 
-/* ============ SCENE 2: cyborg with smartphone ============ */
-.px-cyborg {
-  position: absolute;
-  left: 96px;
-  bottom: 40px;
-  width: 52px;
-  height: 78px;
-  z-index: 3;
-  animation: bob 1.8s steps(2) infinite;
-}
-.px-cyborg .chead {
-  position: absolute;
-  left: 8px;
-  top: 0;
-  width: 30px;
-  height: 26px;
-  background: linear-gradient(180deg, #9aa3b2 0 40%, #5b6472 40% 100%);
-  box-shadow: 0 0 0 2px #0a0b10;
-}
-.px-cyborg .chead::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 10px;
-  width: 26px;
-  height: 8px;
-  background: linear-gradient(90deg, var(--pink) 0 60%, #0a0b10 60% 70%, var(--cyan) 70% 100%);
-  box-shadow: 0 0 10px var(--pink);
-  animation: visor 2.6s steps(3) infinite;
-}
-@keyframes visor { 50% { filter: hue-rotate(40deg) brightness(1.3); } }
-.px-cyborg .chead::after {
-  content: "";
-  position: absolute;
-  right: -6px;
-  top: -8px;
-  width: 4px;
-  height: 12px;
-  background: var(--cyan);
-  box-shadow: 4px 0 0 #0a0b10, 0 -4px 0 0 var(--pink);
-}
-.px-cyborg .cbody {
-  position: absolute;
-  left: 4px;
-  top: 28px;
-  width: 38px;
-  height: 30px;
-  background:
-    linear-gradient(90deg, #7b2cbf 0 12px, #1b1c3a 12px 26px, #7b2cbf 26px 38px);
-  box-shadow: 0 0 0 2px #0a0b10, 0 0 12px rgba(123,44,191,0.8);
-}
-.px-cyborg .cbody::after {
-  content: "";
-  position: absolute;
-  left: 15px;
-  top: 10px;
-  width: 8px;
-  height: 8px;
-  background: var(--cyan);
-  box-shadow: 0 0 10px var(--cyan);
-  animation: twinkle 1s steps(2) infinite;
-}
-.px-phone {
-  position: absolute;
-  left: 152px;
-  bottom: 56px;
-  width: 20px;
-  height: 32px;
-  background: #0a0b10;
-  border: 2px solid var(--cyan);
-  box-shadow: 0 0 16px var(--cyan);
-  z-index: 4;
-  animation: bob 1.8s steps(2) infinite reverse;
-}
-.px-phone::before {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  background:
-    linear-gradient(var(--pink), var(--pink)) 0 0 / 100% 4px no-repeat,
-    linear-gradient(rgba(0,240,255,0.7), rgba(0,240,255,0.7)) 0 8px / 100% 3px no-repeat,
-    linear-gradient(rgba(0,240,255,0.5), rgba(0,240,255,0.5)) 0 14px / 70% 3px no-repeat;
-  animation: screenFlicker 1.4s steps(2) infinite;
-}
-.px-signal, .px-signal::before, .px-signal::after {
-  position: absolute;
-  border: 2px solid var(--green);
-  border-left-color: transparent;
-  border-bottom-color: transparent;
-  border-radius: 50%;
-  transform: rotate(-45deg);
-}
-.px-signal {
-  left: 176px;
-  bottom: 66px;
-  width: 18px;
-  height: 18px;
-  animation: ping 1.6s ease-out infinite;
-}
-.px-signal::before { content: ""; left: 2px; top: 2px; width: 26px; height: 26px; }
-.px-signal::after { content: ""; left: -4px; top: -4px; width: 38px; height: 38px; opacity: 0.6; }
-@keyframes ping { 0% { opacity: 0; transform: rotate(-45deg) scale(0.6); } 30% { opacity: 1; } 100% { opacity: 0; transform: rotate(-45deg) scale(1.15); } }
+/* SCENE B — cyborg smartphone: drone, hologram faces, signal rings */
+.sc-b .cy{left:88px;}
+.sc-b .cy .hd{width:36px; height:30px; background:linear-gradient(180deg,#aeb6c4 0 45%,#5b6472 45% 100%); box-shadow:0 0 0 2px #0a0b10; position:relative;}
+.sc-b .cy .hd::before{content:""; position:absolute; left:3px; top:12px; width:30px; height:9px; background:linear-gradient(90deg,var(--pink) 0 55%,#0a0b10 55% 65%,var(--cyan) 65% 100%); box-shadow:0 0 12px var(--pink); animation:pxVisor 2.4s steps(3) infinite;}
+@keyframes pxVisor{50%{filter:hue-rotate(50deg) brightness(1.35);}}
+.sc-b .cy .hd::after{content:""; position:absolute; right:-7px; top:-9px; width:5px; height:14px; background:var(--cyan); box-shadow:5px 0 0 #0a0b10,0 -5px 0 var(--pink);}
+.sc-b .cy .bd{width:46px; height:36px; margin:2px 0 0 -5px; background:linear-gradient(90deg,#7b2cbf 0 14px,#1b1c3a 14px 32px,#7b2cbf 32px); box-shadow:0 0 0 2px #0a0b10,0 0 14px rgba(123,44,191,.9); position:relative;}
+.sc-b .cy .bd::after{content:""; position:absolute; left:18px; top:12px; width:10px; height:10px; background:var(--cyan); box-shadow:0 0 10px var(--cyan); animation:pxTw 1s steps(2) infinite;}
+.sc-b .phone{position:absolute; left:158px; bottom:calc(20% + 14px); width:26px; height:42px; background:#0a0b10; border:2px solid var(--cyan); box-shadow:0 0 18px var(--cyan); z-index:4; animation:pxBob 1.8s steps(2) infinite reverse;}
+.sc-b .phone::before{content:""; position:absolute; inset:4px; background:linear-gradient(var(--pink),var(--pink)) 0 0/100% 5px no-repeat,linear-gradient(rgba(0,240,255,.8),rgba(0,240,255,.8)) 0 10px/100% 4px no-repeat,linear-gradient(rgba(0,240,255,.5),rgba(0,240,255,.5)) 0 19px/70% 4px no-repeat; animation:pxScr 1.3s steps(2) infinite;}
+.sc-b .holo{position:absolute; left:150px; bottom:calc(20% + 62px); width:42px; height:30px; border:2px solid var(--pink); background:repeating-linear-gradient(0deg,rgba(255,0,127,.35) 0 2px,transparent 2px 5px); box-shadow:0 0 16px var(--pink); z-index:3; animation:pxScr 1.6s steps(2) infinite;}
+.sc-b .holo::before{content:""; position:absolute; left:8px; top:6px; width:12px; height:10px; background:#fff; box-shadow:16px 4px 0 var(--cyan);}
+.sc-b .rings i{position:absolute; border:2px solid var(--green); border-left-color:transparent; border-bottom-color:transparent; border-radius:50%; transform:rotate(-45deg); animation:pxPing 1.7s ease-out infinite;}
+.sc-b .rings i:nth-child(1){left:190px; bottom:44%; width:20px; height:20px;}
+.sc-b .rings i:nth-child(2){left:184px; bottom:42%; width:32px; height:32px; animation-delay:.3s;}
+.sc-b .rings i:nth-child(3){left:178px; bottom:40%; width:44px; height:44px; animation-delay:.6s; opacity:.6;}
+@keyframes pxPing{0%{opacity:0; transform:rotate(-45deg) scale(.6);}30%{opacity:1;}100%{opacity:0; transform:rotate(-45deg) scale(1.15);}}
+.sc-b .drone{position:absolute; left:262px; bottom:62%; width:34px; height:10px; background:#0a0b10; border:2px solid var(--cyan); box-shadow:0 0 12px var(--cyan); animation:pxDrone 3s ease-in-out infinite alternate; z-index:4;}
+.sc-b .drone::before,.sc-b .drone::after{content:""; position:absolute; top:-8px; width:14px; height:6px; background:rgba(0,240,255,.7);}
+.sc-b .drone::before{left:-8px; animation:pxRotor .2s steps(2) infinite;}
+.sc-b .drone::after{right:-8px; animation:pxRotor .2s steps(2) infinite reverse;}
+@keyframes pxRotor{50%{opacity:.3;}}
+@keyframes pxDrone{to{transform:translate(14px,-10px);}}
+.sc-b .bubble1{left:60px; bottom:70%;}
+.sc-b .bubble2{left:236px; bottom:76%;}
 
-/* ============ SCENE 3: cat playing ============ */
-.px-cat {
-  position: absolute;
-  left: 100px;
-  bottom: 42px;
-  width: 64px;
-  height: 40px;
-  z-index: 3;
-}
-.px-cat .cbody2 {
-  position: absolute;
-  left: 8px;
-  bottom: 0;
-  width: 42px;
-  height: 22px;
-  background:
-    linear-gradient(#ff9f1c, #ff9f1c) 0 0 / 100% 100%;
-  box-shadow: 0 0 0 2px #0a0b10;
-}
-.px-cat .cbody2::before {
-  /* stripes */
-  content: "";
-  position: absolute;
-  inset: 2px 6px 2px 6px;
-  background: repeating-linear-gradient(90deg, #0a0b10 0 3px, transparent 3px 9px);
-  opacity: 0.7;
-}
-.px-cat .chead2 {
-  position: absolute;
-  left: 0;
-  bottom: 10px;
-  width: 22px;
-  height: 20px;
-  background: #ff9f1c;
-  box-shadow: 0 0 0 2px #0a0b10;
-  animation: bob 1.2s steps(2) infinite;
-}
-.px-cat .chead2::before {
-  content: "";
-  position: absolute;
-  left: -2px;
-  top: -8px;
-  width: 8px;
-  height: 10px;
-  background: #ff9f1c;
-  clip-path: polygon(0 100%, 50% 0, 100% 100%);
-  box-shadow: none;
-}
-.px-cat .chead2::after {
-  content: "";
-  position: absolute;
-  right: -2px;
-  top: -8px;
-  width: 8px;
-  height: 10px;
-  background: #ff9f1c;
-  clip-path: polygon(0 100%, 50% 0, 100% 100%);
-}
-.px-cat .ceye {
-  position: absolute;
-  left: 5px;
-  bottom: 18px;
-  width: 4px;
-  height: 6px;
-  background: var(--cyan);
-  box-shadow: 8px 0 0 var(--cyan), 0 0 8px var(--cyan);
-  z-index: 2;
-  animation: blink 3s steps(1) infinite;
-}
-.px-cat .tail {
-  position: absolute;
-  right: 0;
-  bottom: 4px;
-  width: 18px;
-  height: 8px;
-  background: #ff9f1c;
-  box-shadow: 0 0 0 2px #0a0b10;
-  transform-origin: left center;
-  animation: wag 0.7s ease-in-out infinite alternate;
-}
-@keyframes wag { from { transform: rotate(-18deg); } to { transform: rotate(28deg); } }
-.px-ball {
-  position: absolute;
-  left: 188px;
-  bottom: 44px;
-  width: 18px;
-  height: 18px;
-  background:
-    conic-gradient(var(--pink) 0 25%, var(--cyan) 0 50%, var(--pink) 0 75%, var(--cyan) 0),
-    #fff;
-  box-shadow: 0 0 0 2px #0a0b10, 0 0 12px var(--pink);
-  z-index: 3;
-  animation: bounce 0.9s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
-}
-@keyframes bounce {
-  from { transform: translateY(0) rotate(0deg); }
-  to { transform: translateY(-34px) rotate(180deg); }
-}
-.px-ballshadow {
-  position: absolute;
-  left: 188px;
-  bottom: 42px;
-  width: 22px;
-  height: 6px;
-  background: rgba(0,0,0,0.55);
-  border-radius: 50%;
-  animation: shadowPulse 0.9s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
-}
-@keyframes shadowPulse { from { transform: scaleX(1); opacity: 0.7; } to { transform: scaleX(0.55); opacity: 0.3; } }
-.px-yarn {
-  position: absolute;
-  left: 164px;
-  bottom: 48px;
-  width: 28px;
-  height: 4px;
-  background: repeating-linear-gradient(90deg, var(--pink) 0 6px, transparent 6px 9px);
-  transform: rotate(-12deg);
-}
+/* SCENE C — cat chaos: skateboard cat, yarn, fish screen, paw prints */
+.sc-c .rug{position:absolute; left:40px; right:40px; bottom:18%; height:10px; background:repeating-linear-gradient(90deg,var(--purple) 0 20px,#2a1650 20px 40px); border:2px solid #0a0b10;}
+.sc-c .cat{left:60px;}
+.sc-c .cat .bd{width:52px; height:26px; background:linear-gradient(#ff9f1c,#d97a08); box-shadow:0 0 0 2px #0a0b10; position:relative;}
+.sc-c .cat .bd::before{content:""; position:absolute; inset:3px 8px; background:repeating-linear-gradient(90deg,#0a0b10 0 4px,transparent 4px 11px); opacity:.75;}
+.sc-c .cat .hd{width:26px; height:24px; background:#ff9f1c; box-shadow:0 0 0 2px #0a0b10; position:relative; margin-bottom:-4px; animation:pxBob 1.1s steps(2) infinite;}
+.sc-c .cat .hd::before,.sc-c .cat .hd::after{content:""; position:absolute; top:-10px; width:10px; height:12px; background:#ff9f1c; clip-path:polygon(0 100%,50% 0,100% 100%);}
+.sc-c .cat .hd::before{left:-2px;} .sc-c .cat .hd::after{right:-2px;}
+.sc-c .cat .eyes{position:absolute; left:5px; top:8px; width:5px; height:7px; background:var(--cyan); box-shadow:11px 0 0 var(--cyan),0 0 10px var(--cyan); animation:pxBlink 3s steps(1) infinite;}
+.sc-c .tail{position:absolute; left:48px; bottom:6px; width:24px; height:9px; background:#ff9f1c; box-shadow:0 0 0 2px #0a0b10; transform-origin:left center; animation:pxWag .6s ease-in-out infinite alternate;}
+@keyframes pxWag{from{transform:rotate(-22deg);}to{transform:rotate(30deg);}}
+.sc-c .board{position:absolute; left:56px; bottom:calc(20% - 8px); width:70px; height:8px; background:var(--cyan); box-shadow:0 0 0 2px #0a0b10,0 0 12px var(--cyan); z-index:2;}
+.sc-c .board::before,.sc-c .board::after{content:""; position:absolute; bottom:-8px; width:10px; height:10px; background:#0a0b10; border:2px solid var(--pink); border-radius:50%;}
+.sc-c .board::before{left:8px;} .sc-c .board::after{right:8px;}
+.sc-c .ball{position:absolute; left:196px; bottom:22%; width:22px; height:22px; background:conic-gradient(var(--pink) 0 25%,var(--cyan) 0 50%,var(--pink) 0 75%,var(--cyan) 0); box-shadow:0 0 0 2px #0a0b10,0 0 14px var(--pink); z-index:3; animation:pxBounce .85s cubic-bezier(.4,0,.6,1) infinite alternate;}
+@keyframes pxBounce{from{transform:translateY(0) rotate(0);}to{transform:translateY(-46px) rotate(200deg);}}
+.sc-c .yarn{position:absolute; left:150px; bottom:24%; width:48px; height:5px; background:repeating-linear-gradient(90deg,var(--pink) 0 7px,transparent 7px 10px); transform:rotate(-10deg);}
+.sc-c .paw{position:absolute; width:8px; height:8px; background:rgba(0,240,255,.8); border-radius:50%; box-shadow:12px 4px 0 rgba(0,240,255,.6),24px 0 0 rgba(0,240,255,.45);}
+.sc-c .paw.p1{left:236px; bottom:24%;} .sc-c .paw.p2{left:266px; bottom:28%; transform:rotate(14deg);}
+.sc-c .fishtv{position:absolute; left:286px; bottom:calc(20% + 8px); width:52px; height:40px; border:3px solid #0a0b10; background:#062a33; box-shadow:0 0 14px var(--green); z-index:3;}
+.sc-c .fishtv::before{content:""; position:absolute; left:10px; top:14px; width:20px; height:10px; background:var(--pink); clip-path:polygon(0 50%,35% 0,100% 30%,100% 70%,35% 100%); animation:pxSwim 1.2s ease-in-out infinite alternate;}
+@keyframes pxSwim{to{transform:translateX(10px);}}
+.sc-c .bubble1{left:44px; bottom:70%;}
+.sc-c .bubble2{left:230px; bottom:76%;}
 
-/* ============ SCENE 4: bar VR ============ */
-.px-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 40px;
-  height: 30px;
-  background: linear-gradient(180deg, #3a1c5a, #1b1c3a);
-  border-top: 3px solid var(--cyan);
-  box-shadow: 0 -4px 14px rgba(0,240,255,0.5);
-  z-index: 2;
-}
-.px-bar::before {
-  content: "";
-  position: absolute;
-  left: 18px;
-  top: -24px;
-  width: 14px;
-  height: 20px;
-  background: linear-gradient(var(--cyan), transparent);
-  border: 2px solid #0a0b10;
-  box-shadow: 30px 4px 0 -1px var(--pink), 30px 4px 0 1px #0a0b10, 60px -2px 0 -1px var(--yellow), 90px 6px 0 -1px var(--cyan);
-}
-.px-neon {
-  position: absolute;
-  left: 50%;
-  top: 26px;
-  transform: translateX(-50%);
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 2px;
-  color: var(--pink);
-  text-shadow: 0 0 8px var(--pink), 0 0 18px var(--pink), 2px 2px 0 var(--cyan);
-  z-index: 4;
-  white-space: nowrap;
-  animation: neonBuzz 3.5s steps(1) infinite;
-}
-@keyframes neonBuzz {
-  0%, 86%, 92%, 100% { opacity: 1; }
-  88%, 90% { opacity: 0.25; }
-}
-.px-vrperson {
-  position: absolute;
-  left: 118px;
-  bottom: 62px;
-  width: 46px;
-  height: 56px;
-  z-index: 3;
-  animation: bob 2s steps(2) infinite;
-}
-.px-vrperson .vhead {
-  position: absolute;
-  left: 9px;
-  top: 0;
-  width: 28px;
-  height: 24px;
-  background: #f2c49b;
-  box-shadow: 0 0 0 2px #0a0b10;
-}
-.px-vrperson .vhead::after {
-  /* VR headset */
-  content: "";
-  position: absolute;
-  left: -2px;
-  top: 6px;
-  width: 32px;
-  height: 12px;
-  background: linear-gradient(90deg, #0a0b10 0 70%, var(--cyan) 70% 100%);
-  border: 2px solid var(--cyan);
-  box-shadow: 0 0 14px var(--cyan);
-  animation: vrGlow 1.8s ease-in-out infinite alternate;
-}
-@keyframes vrGlow { to { box-shadow: 0 0 22px var(--pink); border-color: var(--pink); } }
-.px-vrperson .vbody {
-  position: absolute;
-  left: 5px;
-  top: 26px;
-  width: 36px;
-  height: 26px;
-  background: linear-gradient(#00f0ff, #0077aa);
-  box-shadow: 0 0 0 2px #0a0b10;
-}
-.px-vrperson .varm {
-  position: absolute;
-  top: 30px;
-  width: 26px;
-  height: 8px;
-  background: #f2c49b;
-  box-shadow: 0 0 0 2px #0a0b10;
-}
-.px-vrperson .varm.left { left: -14px; transform: rotate(-24deg); animation: vrHands 1s ease-in-out infinite alternate; }
-.px-vrperson .varm.right { right: -14px; transform: rotate(24deg); animation: vrHands 1s ease-in-out infinite alternate-reverse; }
-@keyframes vrHands { to { transform: rotate(0deg) translateY(-3px); } }
-.px-vrbeam {
-  position: absolute;
-  left: 132px;
-  bottom: 84px;
-  width: 60px;
-  height: 3px;
-  background: var(--cyan);
-  box-shadow: 0 0 12px var(--cyan);
-  transform: rotate(-18deg);
-  transform-origin: left center;
-  opacity: 0.8;
-  animation: beam 1.8s ease-in-out infinite alternate;
-}
-@keyframes beam { to { transform: rotate(-8deg); opacity: 0.4; } }
+/* SCENE D — VR bar: stools, bottles, neon, holo dance floor, beams */
+.sc-d .neon{position:absolute; left:50%; top:6px; transform:translateX(-50%); font-size:14px; font-weight:900; letter-spacing:3px; color:var(--pink); text-shadow:0 0 8px var(--pink),0 0 20px var(--pink),2px 2px 0 var(--cyan); z-index:4; white-space:nowrap; animation:pxNeon 3.6s steps(1) infinite;}
+@keyframes pxNeon{0%,86%,92%,100%{opacity:1;}88%,90%{opacity:.2;}}
+.sc-d .shelf{position:absolute; left:16px; right:16px; top:32%; height:6px; background:#0a0b10; border:1px solid var(--cyan); z-index:2;}
+.sc-d .bottles{position:absolute; left:24px; top:16%; width:310px; height:26px; background:linear-gradient(var(--cyan),transparent) 0 8px/12px 18px no-repeat,linear-gradient(var(--pink),transparent) 30px 4px/12px 22px no-repeat,linear-gradient(var(--yellow),transparent) 60px 8px/12px 18px no-repeat,linear-gradient(var(--green),transparent) 90px 2px/12px 24px no-repeat,linear-gradient(var(--cyan),transparent) 150px 6px/12px 20px no-repeat,linear-gradient(var(--pink),transparent) 200px 8px/12px 18px no-repeat,linear-gradient(var(--yellow),transparent) 250px 4px/12px 22px no-repeat; z-index:2;}
+.sc-d .counter{position:absolute; left:0; right:0; bottom:20%; height:26px; background:linear-gradient(180deg,#3a1c5a,#1b1c3a); border-top:3px solid var(--cyan); box-shadow:0 -6px 16px rgba(0,240,255,.55); z-index:2;}
+.sc-d .stool{position:absolute; bottom:20%; width:16px; height:34px; background:#0a0b10; border:2px solid var(--pink); z-index:2;}
+.sc-d .stool.s1{left:40px;} .sc-d .stool.s2{left:290px;}
+.sc-d .vrp{left:150px;}
+.sc-d .vrp .hd{width:32px; height:26px; background:#f2c49b; box-shadow:0 0 0 2px #0a0b10; position:relative;}
+.sc-d .vrp .hd::after{content:""; position:absolute; left:-4px; top:6px; width:40px; height:14px; background:linear-gradient(90deg,#0a0b10 0 68%,var(--cyan) 68% 100%); border:2px solid var(--cyan); box-shadow:0 0 16px var(--cyan); animation:pxVr 1.7s ease-in-out infinite alternate;}
+@keyframes pxVr{to{box-shadow:0 0 26px var(--pink); border-color:var(--pink);}}
+.sc-d .vrp .bd{width:42px; height:30px; margin:2px 0 0 -5px; background:linear-gradient(180deg,#00f0ff,#005f7a); box-shadow:0 0 0 2px #0a0b10; position:relative;}
+.sc-d .vrp .armL,.sc-d .vrp .armR{position:absolute; top:36px; width:30px; height:9px; background:#f2c49b; box-shadow:0 0 0 2px #0a0b10;}
+.sc-d .vrp .armL{left:-24px; transform:rotate(-26deg); animation:pxHands 1s ease-in-out infinite alternate;}
+.sc-d .vrp .armR{right:-24px; transform:rotate(26deg); animation:pxHands 1s ease-in-out infinite alternate-reverse;}
+@keyframes pxHands{to{transform:rotate(0) translateY(-4px);}}
+.sc-d .beam{position:absolute; left:178px; bottom:52%; width:80px; height:3px; background:var(--cyan); box-shadow:0 0 14px var(--cyan); transform:rotate(-16deg); transform-origin:left center; animation:pxBeam 1.7s ease-in-out infinite alternate;}
+.sc-d .beam.b2{left:140px; transform:rotate(-30deg); background:var(--pink); box-shadow:0 0 14px var(--pink); animation-delay:.4s;}
+@keyframes pxBeam{to{transform:rotate(-6deg); opacity:.35;}}
+.sc-d .dance{position:absolute; left:60px; right:60px; bottom:20%; height:4px; background:repeating-linear-gradient(90deg,var(--pink) 0 14px,var(--cyan) 14px 28px,var(--yellow) 28px 42px); animation:pxScr 1s steps(2) infinite;}
+.sc-d .bubble1{left:36px; bottom:72%;}
+.sc-d .bubble2{left:232px; bottom:68%;}
 
-/* floating pixel dust */
-.px-dust {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(3px 3px at 10% 30%, rgba(0,240,255,0.7) 50%, transparent 51%),
-    radial-gradient(2px 2px at 30% 70%, rgba(255,0,127,0.7) 50%, transparent 51%),
-    radial-gradient(2px 2px at 60% 20%, rgba(255,230,0,0.6) 50%, transparent 51%),
-    radial-gradient(3px 3px at 80% 60%, rgba(57,255,20,0.5) 50%, transparent 51%);
-  background-size: 420px 320px;
-  animation: dustFloat 14s linear infinite;
-}
-@keyframes dustFloat {
-  from { background-position: 0 0; }
-  to { background-position: -420px 320px; }
-}
+/* dust + vignette */
+.px-dust{position:absolute; inset:0; z-index:6; background-image:radial-gradient(3px 3px at 10% 30%,rgba(0,240,255,.7) 50%,transparent 51%),radial-gradient(2px 2px at 30% 70%,rgba(255,0,127,.7) 50%,transparent 51%),radial-gradient(2px 2px at 62% 18%,rgba(255,230,0,.6) 50%,transparent 51%),radial-gradient(3px 3px at 82% 62%,rgba(57,255,20,.5) 50%,transparent 51%); background-size:440px 330px; animation:pxDust 14s linear infinite;}
+@keyframes pxDust{to{background-position:-440px 330px;}}
+.px-fade{position:absolute; inset:0; z-index:7; background:radial-gradient(120% 95% at 50% 45%,transparent 52%,rgba(0,0,0,.6) 100%),repeating-linear-gradient(to bottom,rgba(0,0,0,.14) 0 1px,transparent 1px 4px);}
 
-/* global vignette + scanlines */
-.px-vignette {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(0,0,0,0.55) 100%);
-}
-.px-scanlines {
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(to bottom, rgba(0,0,0,0.16) 0 1px, transparent 1px 4px);
-  mix-blend-mode: multiply;
-  opacity: 0.6;
-}
+/* ---------- IN-SESSION: dim + slow, edges stay lively ---------- */
+body.in-session .px-bg{filter:saturate(.6) brightness(.6);}
+body.in-session .px-band__track{animation-duration:120s;}
+body.in-session .px-band--fast .px-band__track{animation-duration:90s;}
+body.in-session .px-band--slow .px-band__track{animation-duration:160s;}
+body.in-session .px-dust{opacity:.35;}
+body.in-session .px-band:nth-child(2),body.in-session .px-band:nth-child(3),body.in-session .px-band:nth-child(4){opacity:.5; filter:brightness(.7);}
+body.in-session .px-actor,body.in-session .px-bubble{animation-play-state:paused;}
+body.in-session .sc-b .rings i{animation-duration:3.4s;}
+body.in-session .sc-c .ball{animation-duration:2.2s;}
 
-/* ============ MUTED IN-SESSION MODE ============ */
-body.in-session .px-bg {
-  opacity: 0.35;
-  filter: saturate(0.55) brightness(0.55) blur(1px);
+@media (max-width:768px){
+  .px-bg{--band-h:15vh;}
+  .px-bands{width:260vmax; height:220vmax; gap:2vmin;}
+  .px-scene{width:270px; flex-basis:270px;}
+  .px-band{min-height:108px;}
+  .px-band__track{animation-duration:32s;}
 }
-body.in-session .px-track { animation-duration: 140s; }
-body.in-session .px-scroll--back .px-track { animation-duration: 200s; }
-body.in-session .px-grid { opacity: 0.25; animation-duration: 12s; }
-body.in-session .px-dust { opacity: 0.35; }
-/* calm the characters so they don't distract from video */
-body.in-session .px-person,
-body.in-session .px-cyborg,
-body.in-session .px-phone,
-body.in-session .px-vrperson,
-body.in-session .px-cat .chead2 { animation-play-state: paused; }
-body.in-session .px-ball { animation-duration: 2.4s; }
-body.in-session .px-signal { animation-duration: 3.2s; }
-
-/* ============ RESPONSIVE ============ */
-@media (max-width: 768px) {
-  .px-card { width: 220px; height: 156px; }
-  .px-sky { inset: 0 0 36px 0; }
-  .px-city { bottom: 36px; height: 42px; }
-  .px-floor { height: 36px; }
-  .px-person { left: 74px; bottom: 32px; transform: scale(0.86); transform-origin: bottom center; }
-  .px-laptop { left: 116px; bottom: 32px; transform: scale(0.86); transform-origin: bottom center; }
-  .px-cyborg { left: 66px; bottom: 32px; transform: scale(0.86); transform-origin: bottom center; }
-  .px-phone { left: 112px; bottom: 46px; }
-  .px-signal { left: 132px; bottom: 54px; }
-  .px-cat { left: 66px; bottom: 34px; transform: scale(0.86); transform-origin: bottom center; }
-  .px-ball, .px-ballshadow { left: 140px; }
-  .px-yarn { left: 120px; }
-  .px-vrperson { left: 82px; bottom: 54px; transform: scale(0.86); transform-origin: bottom center; }
-  .px-vrbeam { left: 96px; }
-  .px-neon { font-size: 11px; top: 22px; }
-  .px-scroll { width: 260vmax; }
-  .px-track { gap: 16px; animation-duration: 55s; }
-  .px-grid { height: 40%; }
-}
-@media (min-width: 1400px) {
-  .px-card { width: 340px; height: 220px; }
-}
-
-/* ============ ACCESSIBILITY ============ */
-@media (prefers-reduced-motion: reduce) {
-  .px-track, .px-grid, .px-dust,
-  .px-person, .px-cyborg, .px-phone, .px-ball, .px-ballshadow,
-  .px-cat .tail, .px-cat .chead2, .px-vrperson, .px-signal,
-  .px-sky::before, .px-city::after, .px-neon { animation: none !important; }
-  .px-scroll { transform: translate(-50%, -50%) rotate(-14deg); }
+@media (min-width:1400px){ .px-bg{--band-h:20vh;} .px-scene{width:400px; flex-basis:400px;} }
+@media (prefers-reduced-motion:reduce){
+  .px-band__track,.px-dust,.px-actor,.px-bubble,.px-scene::before,.px-cityline::after{animation:none !important;}
 }
