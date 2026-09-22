@@ -106,7 +106,7 @@ function hashPassword(pass) {
 // Token & room gateway
 app.post('/api/token', async (req, res) => {
     try {
-        const { roomName, nickname, password } = req.body;
+        const { roomName, nickname, password, clientId } = req.body;
         if (!roomName || !nickname) {
             return res.status(400).json({ error: 'Room name and nickname required' });
         }
@@ -154,9 +154,16 @@ app.post('/api/token', async (req, res) => {
         // Await the asynchronous JWT generation required by livekit-server-sdk v2
         const jwtToken = await at.toJwt();
 
-        // Track all-time user joins
+        // Track all-time unique users.
+        // Prefer the persistent anonymous clientId sent by the client
+        // (survives reconnects, independent of username). Fallback: hash
+        // of the nickname, so the same username isn't double-counted.
+        const uniqueKey = clientId
+            ? `cid:${clientId}`
+            : `name:${crypto.createHash('sha256').update(String(nickname).toLowerCase()).digest('hex').slice(0, 16)}`;
+
         db.prepare('INSERT OR IGNORE INTO users_alltime (identity, name, room_name, created_at) VALUES (?, ?, ?, ?)').run(
-            at.identity,
+            uniqueKey,
             nickname,
             cleanRoom,
             now
