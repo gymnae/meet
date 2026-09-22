@@ -25,14 +25,20 @@ const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'secret';
 const LIVEKIT_HTTP_URL = (process.env.LIVEKIT_HTTP_URL || LIVEKIT_URL.replace(/^ws/, 'http'));
 const roomService = new RoomServiceClient(LIVEKIT_HTTP_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
 
+// Persistent data directory (bind-mount a host folder here in Docker)
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 // Ensure uploads folder exists
-const uploadDir = path.join(__dirname, 'uploads');
+const uploadDir = path.join(DATA_DIR, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Database setup
-const db = new Database('portal.db');
+// Database setup (stored in the data dir so it survives container recreation)
+const db = new Database(path.join(DATA_DIR, 'portal.db'));
 db.pragma('journal_mode = WAL');
 
 db.exec(`
