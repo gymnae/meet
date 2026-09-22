@@ -5,7 +5,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
 import Database from 'better-sqlite3';
-import { AccessToken } from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,6 +19,10 @@ const PORT = process.env.PORT || 3000;
 const LIVEKIT_URL = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'secret';
+
+// LiveKit Room Service for live presence stats (ws:// -> http://)
+const LIVEKIT_HTTP_URL = (process.env.LIVEKIT_HTTP_URL || LIVEKIT_URL.replace(/^ws/, 'http'));
+const roomService = new RoomServiceClient(LIVEKIT_HTTP_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
 
 // Ensure uploads folder exists
 const uploadDir = path.join(__dirname, 'uploads');
@@ -53,6 +57,18 @@ db.exec(`
         original_name TEXT,
         stored_filename TEXT,
         size INTEGER,
+        created_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS channels_alltime (
+        name TEXT PRIMARY KEY,
+        created_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS users_alltime (
+        identity TEXT PRIMARY KEY,
+        name TEXT,
+        room_name TEXT,
         created_at INTEGER
     );
 `);
@@ -100,6 +116,8 @@ app.post('/api/token', async (req, res) => {
                 now,
                 now
             );
+            // Track all-time channel count (rooms table is purged after 7 days)
+            db.prepare('INSERT OR IGNORE INTO channels_alltime (name, created_at) VALUES (?, ?)').run(cleanRoom, now);
         } else {
             db.prepare('UPDATE rooms SET updated_at = ? WHERE name = ?').run(now, cleanRoom);
         }
@@ -119,6 +137,14 @@ app.post('/api/token', async (req, res) => {
 
         // Await the asynchronous JWT generation required by livekit-server-sdk v2
         const jwtToken = await at.toJwt();
+
+        // Track all-time user joins
+        db.prepare('INSERT OR IGNORE INTO users_alltime (identity, name, room_name, created_at) VALUES (?, ?, ?, ?)').run(
+            at.identity,
+            nickname,
+            cleanRoom,
+            now
+        );
 
         res.json({ token: jwtToken, serverUrl: LIVEKIT_URL });
     } catch (err) {
@@ -238,6 +264,42 @@ setInterval(() => {
     // 3. Purge inactive rooms older than 7 days
     db.prepare('DELETE FROM rooms WHERE updated_at < ?').run(now - 7 * 24 * 60 * 60 * 1000);
 }, 10000);
+
+// Status dashboard endpoint
+app.get('/api/status', async (req, res) => {
+    const totalChannels = db.prepare('SELECT COUNT(*) AS c FROM channels_alltime').get().c;
+    const totalUsers = db.prepare('SELECT COUNT(*) AS c FROM users_alltime').get().c;
+
+    // All known channels from the database (rooms table = currently known)
+    const knownChannels = db.prepare('SELECT name, created_at, updated_at FROM rooms ORDER BY name ASC').all();
+
+    let currentUsers = 0;
+    const activeChannelsSet = new Set();
+    try {
+        const liveRooms = await roomService.listRooms([]);
+        for (const room of liveRooms) {
+            if (room.numParticipants > 0) {
+                activeChannelsSet.add(room.name);
+                currentUsers += room.numParticipants;
+            }
+        }
+    } catch (err) {
+        console.error('[Status] LiveKit unreachable:', err.message);
+    }
+
+    const activeChannels = [...activeChannelsSet].sort().map(name => ({ name }));
+    const idleChannels = knownChannels
+        .map(r => r.name)
+        .filter(name => !activeChannelsSet.has(name));
+
+    res.json({
+        currentUsers,
+        activeChannels,
+        idleChannels,
+        totalChannels,
+        totalUsers
+    });
+});
 
 server.listen(PORT, () => {
     console.log(`[meet.] Server running on http://localhost:${PORT}`);
