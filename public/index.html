@@ -2,21 +2,46 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>meet.</title>
-    
+    <meta name="description" content="Zero-install video rooms. No account, no install, rooms vanish after 7 days.">
+    <meta name="theme-color" content="#0a0b10">
+    <meta name="color-scheme" content="dark">
+
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="meet.">
-    
+
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0b10'/%3E%3Crect x='3' y='3' width='58' height='58' rx='10' fill='none' stroke='%23ff007f' stroke-width='3'/%3E%3Crect x='14' y='20' width='36' height='24' rx='3' fill='none' stroke='%2300f0ff' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%23ff007f'/%3E%3Ccircle cx='32' cy='32' r='3' fill='%2300f0ff'/%3E%3Cpath d='M14 52h36' stroke='%2300f0ff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
-    
+
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/pixel-bg.css">
-    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+    <!-- Deferred: only needed after "Connect". Runs before the module script (document order). -->
+    <script defer src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-mic" viewBox="0 0 16 16"><path d="M6 0h4v1h-4zM5 1h6v1h-6zM5 2h6v1h-6zM5 3h6v1h-6zM5 4h6v1h-6zM5 5h6v1h-6zM2 6h2v1h-2zM5 6h6v1h-6zM12 6h2v1h-2zM2 7h2v1h-2zM5 7h6v1h-6zM12 7h2v1h-2zM2 8h2v1h-2zM6 8h4v1h-4zM12 8h2v1h-2zM3 9h2v1h-2zM11 9h2v1h-2zM4 10h8v1h-8zM7 11h2v1h-2zM7 12h2v1h-2zM5 13h6v1h-6z"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 16 16"><path d="M1 3h10v1h-10zM1 4h10v1h-10zM14 4h2v1h-2zM1 5h3v1h-3zM8 5h3v1h-3zM13 5h3v1h-3zM1 6h3v1h-3zM8 6h3v1h-3zM12 6h4v1h-4zM1 7h3v1h-3zM8 7h3v1h-3zM12 7h4v1h-4zM1 8h3v1h-3zM8 8h3v1h-3zM12 8h4v1h-4zM1 9h3v1h-3zM8 9h3v1h-3zM13 9h3v1h-3zM1 10h10v1h-10zM14 10h2v1h-2zM1 11h10v1h-10z"/></symbol>
+  <symbol id="i-react" viewBox="0 0 16 16"><path d="M5 1h6v1h-6zM3 2h2v1h-2zM11 2h2v1h-2zM2 3h1v1h-1zM13 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM5 5h2v1h-2zM9 5h2v1h-2zM14 5h1v1h-1zM1 6h1v1h-1zM5 6h2v1h-2zM9 6h2v1h-2zM14 6h1v1h-1zM1 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM14 8h1v1h-1zM1 9h1v1h-1zM4 9h2v1h-2zM10 9h2v1h-2zM14 9h1v1h-1zM1 10h1v1h-1zM5 10h6v1h-6zM14 10h1v1h-1zM2 11h1v1h-1zM13 11h1v1h-1zM3 12h2v1h-2zM11 12h2v1h-2zM5 13h6v1h-6z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 16 16"><path d="M1 1h14v1h-14zM1 2h14v1h-14zM1 3h2v1h-2zM13 3h2v1h-2zM1 4h2v1h-2zM4 4h8v1h-8zM13 4h2v1h-2zM1 5h2v1h-2zM13 5h2v1h-2zM1 6h2v1h-2zM4 6h5v1h-5zM13 6h2v1h-2zM1 7h2v1h-2zM13 7h2v1h-2zM1 8h14v1h-14zM1 9h14v1h-14zM1 10h3v1h-3zM1 11h2v1h-2zM1 12h1v1h-1z"/></symbol>
+  <symbol id="i-share" viewBox="0 0 16 16"><path d="M1 1h14v1h-14zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM8 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM7 4h3v1h-3zM14 4h1v1h-1zM1 5h1v1h-1zM6 5h5v1h-5zM14 5h1v1h-1zM1 6h1v1h-1zM8 6h1v1h-1zM14 6h1v1h-1zM1 7h1v1h-1zM8 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM14 8h1v1h-1zM1 9h14v1h-14zM7 10h2v1h-2zM7 11h2v1h-2zM4 12h8v1h-8z"/></symbol>
+  <symbol id="i-rec" viewBox="0 0 16 16"><path d="M5 2h6v1h-6zM4 3h8v1h-8zM3 4h10v1h-10zM3 5h10v1h-10zM3 6h10v1h-10zM3 7h10v1h-10zM3 8h10v1h-10zM3 9h10v1h-10zM4 10h8v1h-8zM5 11h6v1h-6z"/></symbol>
+  <symbol id="i-full" viewBox="0 0 16 16"><path d="M1 1h5v1h-5zM10 1h5v1h-5zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM1 12h1v1h-1zM14 12h1v1h-1zM1 13h1v1h-1zM14 13h1v1h-1zM1 14h5v1h-5zM10 14h5v1h-5z"/></symbol>
+  <symbol id="i-leave" viewBox="0 0 16 16"><path d="M1 1h7v1h-7zM1 2h1v1h-1zM1 3h1v1h-1zM1 4h1v1h-1zM11 4h1v1h-1zM1 5h1v1h-1zM11 5h2v1h-2zM1 6h1v1h-1zM4 6h9v1h-9zM1 7h1v1h-1zM4 7h10v1h-10zM1 8h1v1h-1zM4 8h9v1h-9zM1 9h1v1h-1zM11 9h2v1h-2zM1 10h1v1h-1zM11 10h1v1h-1zM1 11h1v1h-1zM1 12h1v1h-1zM1 13h7v1h-7z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16"><path d="M2 2h2v1h-2zM12 2h2v1h-2zM3 3h2v1h-2zM11 3h2v1h-2zM4 4h2v1h-2zM10 4h2v1h-2zM5 5h2v1h-2zM9 5h2v1h-2zM6 6h4v1h-4zM7 7h2v1h-2zM6 8h4v1h-4zM5 9h2v1h-2zM9 9h2v1h-2zM4 10h2v1h-2zM10 10h2v1h-2zM3 11h2v1h-2zM11 11h2v1h-2zM2 12h2v1h-2zM12 12h2v1h-2z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 16 16"><path d="M8 2h1v1h-1zM8 3h2v1h-2zM8 4h3v1h-3zM8 5h4v1h-4zM1 6h13v1h-13zM1 7h14v1h-14zM1 8h13v1h-13zM8 9h4v1h-4zM8 10h3v1h-3zM8 11h2v1h-2zM8 12h1v1h-1z"/></symbol>
+  <symbol id="i-attach" viewBox="0 0 16 16"><path d="M7 1h2v1h-2zM6 2h4v1h-4zM5 3h6v1h-6zM4 4h2v1h-2zM7 4h2v1h-2zM10 4h2v1h-2zM7 5h2v1h-2zM7 6h2v1h-2zM7 7h2v1h-2zM7 8h2v1h-2zM7 9h2v1h-2zM1 10h2v1h-2zM13 10h2v1h-2zM1 11h2v1h-2zM13 11h2v1h-2zM1 12h14v1h-14zM1 13h14v1h-14z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 16 16"><path d="M7 1h2v1h-2zM7 2h2v1h-2zM7 3h2v1h-2zM7 4h2v1h-2zM7 5h2v1h-2zM4 6h2v1h-2zM7 6h2v1h-2zM10 6h2v1h-2zM5 7h6v1h-6zM6 8h4v1h-4zM7 9h2v1h-2zM1 10h2v1h-2zM13 10h2v1h-2zM1 11h2v1h-2zM13 11h2v1h-2zM1 12h14v1h-14zM1 13h14v1h-14z"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 16 16"><path d="M4 1h8v1h-8zM4 2h8v1h-8zM5 3h6v1h-6zM5 4h6v1h-6zM5 5h6v1h-6zM3 6h10v1h-10zM3 7h10v1h-10zM7 8h2v1h-2zM7 9h2v1h-2zM7 10h2v1h-2zM7 11h2v1h-2zM7 12h1v1h-1z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16"><path d="M5 1h6v1h-6zM3 2h2v1h-2zM11 2h2v1h-2zM2 3h1v1h-1zM12 3h2v1h-2zM1 4h1v1h-1zM8 4h2v1h-2zM14 4h1v1h-1zM1 5h1v1h-1zM8 5h2v1h-2zM14 5h1v1h-1zM1 6h1v1h-1zM8 6h2v1h-2zM14 6h1v1h-1zM1 7h1v1h-1zM8 7h5v1h-5zM14 7h1v1h-1zM1 8h1v1h-1zM8 8h5v1h-5zM14 8h1v1h-1zM1 9h1v1h-1zM14 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM2 11h1v1h-1zM13 11h1v1h-1zM3 12h2v1h-2zM11 12h2v1h-2zM5 13h6v1h-6z"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 16 16"><path d="M7 1h2v1h-2zM5 2h1v1h-1zM7 2h2v1h-2zM10 2h2v1h-2zM5 3h1v1h-1zM7 3h2v1h-2zM10 3h2v1h-2zM3 4h1v1h-1zM5 4h1v1h-1zM7 4h2v1h-2zM10 4h2v1h-2zM3 5h1v1h-1zM5 5h1v1h-1zM7 5h2v1h-2zM10 5h2v1h-2zM3 6h1v1h-1zM5 6h1v1h-1zM7 6h2v1h-2zM10 6h2v1h-2zM13 6h2v1h-2zM3 7h1v1h-1zM5 7h1v1h-1zM7 7h2v1h-2zM10 7h2v1h-2zM13 7h2v1h-2zM3 8h10v1h-10zM14 8h1v1h-1zM3 9h11v1h-11zM3 10h10v1h-10zM4 11h8v1h-8zM5 12h6v1h-6zM5 13h6v1h-6z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 16 16"><path d="M7 1h2v1h-2zM6 2h4v1h-4zM6 3h1v1h-1zM9 3h1v1h-1zM5 4h2v1h-2zM9 4h2v1h-2zM5 5h1v1h-1zM7 5h2v1h-2zM10 5h1v1h-1zM4 6h2v1h-2zM7 6h2v1h-2zM10 6h2v1h-2zM4 7h1v1h-1zM7 7h2v1h-2zM11 7h1v1h-1zM3 8h2v1h-2zM7 8h2v1h-2zM11 8h2v1h-2zM3 9h1v1h-1zM12 9h1v1h-1zM2 10h2v1h-2zM7 10h2v1h-2zM12 10h2v1h-2zM2 11h1v1h-1zM7 11h2v1h-2zM13 11h1v1h-1zM1 12h14v1h-14zM1 13h14v1h-14z"/></symbol>
+  <symbol id="i-slash" viewBox="0 0 16 16"><path d="M1 0h2v1h-2zM2 1h2v1h-2zM3 2h2v1h-2zM4 3h2v1h-2zM5 4h2v1h-2zM6 5h2v1h-2zM7 6h2v1h-2zM8 7h2v1h-2zM9 8h2v1h-2zM10 9h2v1h-2zM11 10h2v1h-2zM12 11h2v1h-2zM13 12h2v1h-2zM14 13h2v1h-2z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="M1 2h5v1h-5zM10 2h5v1h-5zM1 3h1v1h-1zM12 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM11 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM10 5h1v1h-1zM14 5h1v1h-1zM1 6h1v1h-1zM9 6h1v1h-1zM1 7h1v1h-1zM8 7h1v1h-1zM1 8h1v1h-1zM1 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM1 12h14v1h-14z"/></symbol>
+</svg>
+
     <!-- V2 CSS-only seamless cyberpunk pixelart bands (login fullscreen + muted in-session) -->
     <div class="px-bg" aria-hidden="true">
         <div class="px-bands">
@@ -25,25 +50,25 @@
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                 </div>
                 <div class="px-seq">
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                 </div>
             </div></div>
             <div class="px-band px-band--rev"><div class="px-band__track">
                 <div class="px-seq">
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
                 </div>
                 <div class="px-seq">
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
                 </div>
@@ -51,26 +76,26 @@
             <div class="px-band"><div class="px-band__track">
                 <div class="px-seq">
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
                 </div>
                 <div class="px-seq">
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
                 </div>
             </div></div>
             <div class="px-band px-band--rev px-band--slow"><div class="px-band__track">
                 <div class="px-seq">
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
                 </div>
                 <div class="px-seq">
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
@@ -79,13 +104,13 @@
             <div class="px-band px-band--fast"><div class="px-band__track">
                 <div class="px-seq">
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
                 </div>
                 <div class="px-seq">
                     <div class="px-scene sc-a"><div class="px-cityline"></div><div class="lamp"></div><div class="desk"></div><div class="px-actor person"><div class="hd"></div><div class="bd"></div><div class="arm"></div></div><div class="laptop"><div class="scr"></div><div class="base"></div></div><div class="mug"></div><div class="px-bubble bubble1">on air…</div><div class="px-bubble pink bubble2">lol brb ☕</div><div class="px-ground"></div></div>
-                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">NEO BAR ▸ LIVE</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
+                    <div class="px-scene sc-d"><div class="bottles"></div><div class="shelf"></div><div class="neon">Neo bar ▸ live</div><div class="stool s1"></div><div class="stool s2"></div><div class="counter"></div><div class="dance"></div><div class="px-actor vrp"><div class="hd"></div><div class="bd"></div><div class="armL"></div><div class="armR"></div></div><div class="beam"></div><div class="px-bubble bubble1">lagers + lasers</div><div class="px-bubble pink bubble2">joining via VR 🕶</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-b"><div class="px-cityline"></div><div class="px-actor cy"><div class="hd"></div><div class="bd"></div></div><div class="phone"></div><div class="holo"></div><div class="rings"><i></i><i></i></div><div class="drone"></div><div class="px-bubble bubble1">📶 5 bars</div><div class="px-bubble green bubble2">yo, u lag?</div><div class="px-ground"></div></div>
                     <div class="px-scene sc-c"><div class="px-cityline"></div><div class="rug"></div><div class="px-actor cat"><div class="hd"><div class="eyes"></div></div><div class="bd"></div><div class="tail"></div></div><div class="board"></div><div class="yarn"></div><div class="ball"></div><div class="fishtv"></div><div class="px-bubble bubble1">mrrp!</div><div class="px-bubble pink bubble2">cam: ON 🐾</div><div class="px-ground"></div></div>
                 </div>
@@ -94,74 +119,100 @@
         <div class="px-fade"></div>
     </div>
 
-    <!-- Room Selection Gate -->
-    <div class="setup-box" id="loginSetup">
-        <h2 style="margin-top:0; font-weight: 600; font-size: 28px; color: #ff007f; text-shadow: 0 0 5px #ff007f; letter-spacing: -1px;">meet.</h2>
-        <input type="text" id="roomInput" placeholder="Room Name" required autocorrect="off" autocapitalize="none">
-        <input type="text" id="nameInput" placeholder="Your Name" required>
-        
-        <input type="password" id="passwordInput" placeholder="Password (Optional)">
-        
-        <button id="joinBtn" class="primary-btn" onclick="initiateCall()">Connect Session</button>
-    </div>
-    <a class="repo-link" id="repoLink" href="https://github.com/gymnae/meet" target="_blank" rel="noopener noreferrer" aria-label="Open project repository on GitHub">
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            <path d="M8 0C3.58 0 0 3.67 0 8.2c0 3.63 2.29 6.71 5.47 7.8.4.07.55-.18.55-.39 0-.19-.01-.83-.01-1.5-2.01.38-2.53-.51-2.69-.98-.09-.24-.48-.98-.82-1.18-.28-.16-.68-.56-.01-.57.63-.01 1.08.6 1.23.85.72 1.24 1.87.89 2.33.68.07-.54.28-.89.51-1.09-1.78-.21-3.64-.91-3.64-4.05 0-.89.31-1.62.82-2.19-.08-.21-.36-1.05.08-2.19 0 0 .67-.22 2.2.84a7.4 7.4 0 0 1 4 0c1.53-1.06 2.2-.84 2.2-.84.44 1.14.16 1.98.08 2.19.51.57.82 1.3.82 2.19 0 3.15-1.87 3.84-3.65 4.05.29.26.54.76.54 1.54 0 1.11-.01 2.01-.01 2.29 0 .21.15.47.55.39A8.22 8.22 0 0 0 16 8.2C16 3.67 12.42 0 8 0Z"></path>
-        </svg>
-    </a>
+    <!-- Join gate -->
+    <main class="gate" id="loginSetup">
+        <form class="setup-box" id="gateForm" novalidate aria-labelledby="gateTitle">
+            <h1 class="sr-only" id="gateTitle">Join a meet. room</h1>
+            <svg class="wordmark" viewBox="0 0 22 8" role="img" aria-label="meet." shape-rendering="crispEdges"><path class="wm-shadow" transform="translate(1 1)" d="M0 2h4v1h-4zM0 3h1v1h-1zM2 3h1v1h-1zM4 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM4 4h1v1h-1zM0 5h1v1h-1zM2 5h1v1h-1zM4 5h1v1h-1zM0 6h1v1h-1zM2 6h1v1h-1zM4 6h1v1h-1zM7 2h2v1h-2zM6 3h1v1h-1zM9 3h1v1h-1zM6 4h4v1h-4zM6 5h1v1h-1zM7 6h3v1h-3zM12 2h2v1h-2zM11 3h1v1h-1zM14 3h1v1h-1zM11 4h4v1h-4zM11 5h1v1h-1zM12 6h3v1h-3zM17 0h1v1h-1zM17 1h1v1h-1zM16 2h3v1h-3zM17 3h1v1h-1zM17 4h1v1h-1zM17 5h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1z"/><path class="wm-letters" d="M0 2h4v1h-4zM0 3h1v1h-1zM2 3h1v1h-1zM4 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM4 4h1v1h-1zM0 5h1v1h-1zM2 5h1v1h-1zM4 5h1v1h-1zM0 6h1v1h-1zM2 6h1v1h-1zM4 6h1v1h-1zM7 2h2v1h-2zM6 3h1v1h-1zM9 3h1v1h-1zM6 4h4v1h-4zM6 5h1v1h-1zM7 6h3v1h-3zM12 2h2v1h-2zM11 3h1v1h-1zM14 3h1v1h-1zM11 4h4v1h-4zM11 5h1v1h-1zM12 6h3v1h-3zM17 0h1v1h-1zM17 1h1v1h-1zM16 2h3v1h-3zM17 3h1v1h-1zM17 4h1v1h-1zM17 5h1v1h-1zM18 6h1v1h-1z"/><path class="wm-dot" d="M20 6h1v1h-1z"/></svg>
+            <p class="tagline">No account. No install. Rooms vanish after 7 days.</p>
 
-    <!-- Active Room Header -->
-    <div id="room-header">
-        <div>Channel: <strong id="headerRoomLabel" style="color:#00f0ff; text-shadow: 0 0 5px #00f0ff;">-</strong></div>
-        <button class="share-btn" onclick="copyShareLink()">Copy Link</button>
-    </div>
+            <div class="field">
+                <label for="roomInput">Room name</label>
+                <input type="text" id="roomInput" name="room" placeholder="night-shift" required autocorrect="off" autocapitalize="none" autocomplete="off" spellcheck="false" aria-describedby="roomHint">
+                <span class="field-hint" id="roomHint" aria-live="polite"></span>
+            </div>
 
-    <!-- Main Viewport Canvas -->
+            <div class="field">
+                <label for="nameInput">Your name</label>
+                <input type="text" id="nameInput" name="nickname" placeholder="How others see you" required autocomplete="nickname">
+            </div>
+
+            <div class="field" id="passwordField">
+                <label for="passwordInput">Password <span class="opt">(optional)</span></label>
+                <input type="password" id="passwordInput" name="password" placeholder="Protects a new room" autocomplete="off">
+            </div>
+
+            <p class="form-error" id="gateError" role="alert"></p>
+
+            <button type="submit" id="joinBtn" class="primary-btn">Connect</button>
+        </form>
+
+        <div class="gate-footer">
+            <a class="repo-link" id="repoLink" href="https://github.com/gymnae/meet" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.67 0 8.2c0 3.63 2.29 6.71 5.47 7.8.4.07.55-.18.55-.39 0-.19-.01-.83-.01-1.5-2.01.38-2.53-.51-2.69-.98-.09-.24-.48-.98-.82-1.18-.28-.16-.68-.56-.01-.57.63-.01 1.08.6 1.23.85.72 1.24 1.87.89 2.33.68.07-.54.28-.89.51-1.09-1.78-.21-3.64-.91-3.64-4.05 0-.89.31-1.62.82-2.19-.08-.21-.36-1.05.08-2.19 0 0 .67-.22 2.2.84a7.4 7.4 0 0 1 4 0c1.53-1.06 2.2-.84 2.2-.84.44 1.14.16 1.98.08 2.19.51.57.82 1.3.82 2.19 0 3.15-1.87 3.84-3.65 4.05.29.26.54.76.54 1.54 0 1.11-.01 2.01-.01 2.29 0 .21.15.47.55.39A8.22 8.22 0 0 0 16 8.2C16 3.67 12.42 0 8 0Z"/></svg>
+                <span>Source on GitHub</span>
+            </a>
+        </div>
+    </main>
+
+    <!-- In-call header -->
+    <header id="room-header">
+        <div class="channel">
+            <span class="channel-label">Channel</span>
+            <strong id="headerRoomLabel" class="channel-id">-</strong>
+        </div>
+        <div class="header-actions">
+            <span class="rec-chip" role="status">Recording</span>
+            <button class="share-btn" type="button" onclick="copyShareLink()" aria-label="Copy link"><svg class="icon icon--16" aria-hidden="true"><use href="#i-link"/></svg><span class="btn-label">Copy link</span></button>
+        </div>
+    </header>
+
+    <!-- Video workspace -->
     <div id="video-container">
-        <div class="grid" id="videoGrid"></div>
-        <div id="camMenu"></div>
-        <div id="reactionMenu"></div>
-        <div id="micMenu"></div>
+        <div class="grid" id="videoGrid" aria-label="Participants"></div>
+        <div id="camMenu" role="menu" aria-label="Camera options"></div>
+        <div id="reactionMenu" role="menu" aria-label="Reactions"></div>
+        <div id="micMenu" role="menu" aria-label="Microphone options"></div>
 
-        <!-- Slide-Out Ephemeral Chat & File Drawer -->
-        <div id="chatDrawer" class="chat-drawer">
+        <!-- Ephemeral chat & files -->
+        <aside id="chatDrawer" class="chat-drawer" aria-labelledby="chatTitle">
             <div class="chat-header">
                 <div class="chat-title">
-                    <span>TRANSMISSIONS</span>
-                    <span class="chat-subtitle">Chat: 1m TTL | Files: 10m TTL</span>
+                    <h2 id="chatTitle">Transmissions</h2>
+                    <span class="chat-subtitle">Chat 1 min · files 10 min</span>
                 </div>
-                <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+                <button class="chat-close-btn" type="button" onclick="toggleChat()" aria-label="Close transmissions"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
             </div>
-            
-            <div id="chatStream" class="chat-stream"></div>
 
-            <div id="uploadProgressBar" class="upload-progress-container">
+            <div id="chatStream" class="chat-stream" role="log" aria-live="polite"></div>
+
+            <div id="uploadProgressBar" class="upload-progress-container" role="progressbar" aria-label="Upload progress">
                 <div id="uploadProgressFill" class="upload-progress-fill"></div>
             </div>
 
             <form id="chatForm" class="chat-input-bar" onsubmit="handleChatSubmit(event)">
-                <input type="file" id="fileInput" style="display: none;" onchange="handleFileUpload(event)">
-                <button type="button" class="chat-clip-btn" title="Share file (up to 200MB)" onclick="document.getElementById('fileInput').click()">📎</button>
-                <input type="text" id="chatInput" placeholder="Type transmission..." autocomplete="off">
-                <button type="submit" class="chat-send-btn">➤</button>
+                <input type="file" id="fileInput" hidden onchange="handleFileUpload(event)">
+                <button type="button" class="chat-clip-btn" aria-label="Share a file, up to 200 MB" title="Share a file (up to 200 MB)" onclick="document.getElementById('fileInput').click()"><svg class="icon" aria-hidden="true"><use href="#i-attach"/></svg></button>
+                <label for="chatInput" class="sr-only">Message</label>
+                <input type="text" id="chatInput" placeholder="Write a message" autocomplete="off">
+                <button type="submit" class="chat-send-btn" aria-label="Send"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg></button>
             </form>
-        </div>
+        </aside>
     </div>
 
-    <!-- Controls Dock -->
-    <div id="control-dock">
-        <button id="btnMic" class="dock-btn" onclick="toggleMic()">Mic</button>
-        <button id="btnCam" class="dock-btn" onclick="toggleCam()">Cam</button>
-        <button id="btnReact" class="dock-btn" onclick="toggleReactionMenu()">React</button>
-        <button id="btnChat" class="dock-btn" onclick="toggleChat()">
-            Chat
-            <span id="chatBadge" class="chat-badge"></span>
-        </button>
-        <button id="btnScreen" class="dock-btn" onclick="toggleScreenShare()">Share</button>
-        <button id="btnRec" class="dock-btn desktop-only" onclick="toggleRecording()">Rec</button>
-        <button id="btnFullscreen" class="dock-btn" onclick="toggleFullscreen()">Full</button>
-        <button class="dock-btn leave" onclick="terminateSession(true)">Leave</button>
-    </div>
+    <!-- Controls dock -->
+    <nav id="control-dock" aria-label="Call controls">
+        <button id="btnMic" class="dock-btn" type="button" onclick="toggleMic()" aria-label="Mic"><svg class="icon" aria-hidden="true"><use href="#i-mic"/><use class="slash" href="#i-slash"/></svg><span class="dock-label">Mic</span></button>
+        <button id="btnCam" class="dock-btn" type="button" onclick="toggleCam()" aria-label="Cam"><svg class="icon" aria-hidden="true"><use href="#i-cam"/><use class="slash" href="#i-slash"/></svg><span class="dock-label">Cam</span></button>
+        <button id="btnReact" class="dock-btn" type="button" onclick="toggleReactionMenu()" aria-label="React" aria-haspopup="menu"><svg class="icon" aria-hidden="true"><use href="#i-react"/></svg><span class="dock-label">React</span></button>
+        <button id="btnChat" class="dock-btn" type="button" onclick="toggleChat()" aria-label="Chat" aria-controls="chatDrawer"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span class="dock-label">Chat</span><span id="chatBadge" class="chat-badge"></span></button>
+        <button id="btnScreen" class="dock-btn" type="button" onclick="toggleScreenShare()" aria-label="Share"><svg class="icon" aria-hidden="true"><use href="#i-share"/></svg><span class="dock-label">Share</span></button>
+        <button id="btnRec" class="dock-btn desktop-only" type="button" onclick="toggleRecording()" aria-label="Rec"><svg class="icon" aria-hidden="true"><use href="#i-rec"/></svg><span class="dock-label">Rec</span></button>
+        <button id="btnFullscreen" class="dock-btn" type="button" onclick="toggleFullscreen()" aria-label="Full"><svg class="icon" aria-hidden="true"><use href="#i-full"/></svg><span class="dock-label">Full</span></button>
+        <button class="dock-btn leave" type="button" onclick="terminateSession(true)" aria-label="Leave"><svg class="icon" aria-hidden="true"><use href="#i-leave"/></svg><span class="dock-label">Leave</span></button>
+    </nav>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script type="module" src="/js/main.js"></script>
 </body>

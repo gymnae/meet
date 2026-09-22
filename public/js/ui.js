@@ -71,13 +71,34 @@ export function playSynthSound(type) {
     }
 }
 
+// === DOCK LABEL: swaps the caption, keeps the pixel icon, keeps AT in sync ===
+export function setDockLabel(btn, text) {
+    if (!btn) return;
+    const label = btn.querySelector('.dock-label');
+    if (label) label.textContent = text; else btn.textContent = text;
+    btn.setAttribute('aria-label', text);
+}
+
+// === TOAST: non-blocking replacement for alert() ===
+let toastTimer = null;
+export function showToast(message, variant = 'info', duration = 3600) {
+    const el = document.getElementById('toast');
+    if (!el) { console.warn('[toast]', message); return; }
+    clearTimeout(toastTimer);
+    el.textContent = message;
+    el.className = 'toast' + (variant !== 'info' ? ' ' + variant : '');
+    void el.offsetWidth; // restart transition
+    el.classList.add('show');
+    toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
 export function copyShareLink() {
     const roomName = document.getElementById('headerRoomLabel').innerText;
     const deepLink = `${window.location.origin}${window.location.pathname}#${encodeURIComponent(roomName)}`;
     
     navigator.clipboard.writeText(deepLink)
-        .then(() => alert("Deep link copied to clipboard!"))
-        .catch(() => alert("Failed to copy link."));
+        .then(() => showToast('Link copied. Anyone with it can join.'))
+        .catch(() => showToast('Could not copy the link. Copy it from the address bar.', 'error'));
 }
 
 export function applyDynamicMirrorEffect(videoTrackInstance) {
@@ -119,9 +140,14 @@ export function recalculateLayout() {
     // Read geometry before any writes to avoid a forced synchronous layout.
     const aspect = grid.clientWidth / grid.clientHeight;
 
+    // State classes only; visuals are owned by CSS (design.md, video tile states).
+    // toggle() with a force flag is a no-op when the class already matches.
     rawTiles.forEach(tile => {
-        const isMax = tile.id === targetMaximizeId;
-        if (tile.classList.contains('maximized') !== isMax) tile.classList.toggle('maximized', isMax);
+        tile.classList.toggle('maximized', tile.id === targetMaximizeId);
+        const isPinned = tile.id === AppState.pinnedTileId;
+        tile.classList.toggle('is-pinned', isPinned);
+        const shield = tile.querySelector('.touch-shield');
+        if (shield && shield.getAttribute('aria-pressed') !== String(isPinned)) shield.setAttribute('aria-pressed', String(isPinned));
     });
 
     if (targetMaximizeId) {
@@ -202,8 +228,8 @@ export function recalculateLayout() {
 }
 
 // === ACTIVE SPEAKER HIGHLIGHT ENGINE (INCLUDING MAXIMIZED TILES) ===
-// Border/glow only. Speaker changes arrive several times a second, so they call this directly
-// instead of re-running the grid layout, and each tile is only restyled when its look changes.
+// Toggles .speaking only; CSS draws the ring. Speaker changes arrive several times a second, so they call this directly
+// instead of re-running the grid layout.
 export function updateSpeakerHighlight(tiles, targetMaximizeId) {
     if (!tiles) {
         const grid = document.getElementById('videoGrid');
@@ -222,29 +248,8 @@ export function updateSpeakerHighlight(tiles, targetMaximizeId) {
     const maximizedIsSpeaker = !!targetMaximizeId && (targetMaximizeId === speakerTileId || targetMaximizeId === speakerScreenTileId);
 
     tiles.forEach(tile => {
-        // Base violet, then maximized cyan, local PiP magenta, speaker green, speaker's maximized view brighter green.
-        let border = '#7b2cbf';
-        let shadow = '0 4px 10px rgba(123, 44, 191, 0.3)';
-        if (tile.id === targetMaximizeId) {
-            border = '#00f0ff';
-            shadow = '0 0 25px rgba(0, 240, 255, 0.6)';
-        } else if (tile.id === 'tile_local_camera') {
-            border = '#ff007f';
-        }
-        if (tile.id === speakerTileId) {
-            border = '#39ff14';
-            shadow = '0 0 15px rgba(57, 255, 20, 0.7)';
-        }
-        if (maximizedIsSpeaker && tile.id === targetMaximizeId) {
-            border = '#39ff14';
-            shadow = '0 0 35px rgba(57, 255, 20, 0.9)';
-        }
-
-        const look = border + '|' + shadow;
-        if (tile.dataset.look === look) return;
-        tile.dataset.look = look;
-        tile.style.borderColor = border;
-        tile.style.boxShadow = shadow;
+        const speaking = tile.id === speakerTileId || (maximizedIsSpeaker && tile.id === targetMaximizeId);
+        tile.classList.toggle('speaking', speaking);
     });
 }
 
@@ -301,12 +306,12 @@ export function toggleFullscreen() {
 function togglePseudoFullscreen(btn) {
     const isPseudoActive = document.body.classList.toggle('pseudo-fullscreen');
     if (isPseudoActive) {
-        btn.innerText = "Exit";
-        btn.classList.add('active-off');
+        setDockLabel(btn, "Exit");
+        btn.classList.add('active-on');
         window.scrollTo(0, 1); 
     } else {
-        btn.innerText = "Full";
-        btn.classList.remove('active-off');
+        setDockLabel(btn, "Full");
+        btn.classList.remove('active-on');
         window.scrollTo(0, 0);
     }
     recalculateLayout();

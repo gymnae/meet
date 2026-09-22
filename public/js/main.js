@@ -1,4 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
+import { showToast, setDockLabel } from './ui.js';
 import { copyShareLink, toggleFullscreen, recalculateLayout, updateSpeakerHighlight, applyDynamicMirrorEffect } from './ui.js';
 import { 
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
@@ -43,15 +44,15 @@ window.addEventListener('DOMContentLoaded', () => {
     const passwordInputEl = document.getElementById('passwordInput');
 
     if (currentHashRoom) {
-        passwordInputEl.style.display = 'none';
+        document.getElementById('passwordField').hidden = true;
         const decodedRoom = decodeURIComponent(currentHashRoom);
         document.getElementById('roomInput').value = decodedRoom;
         passwordInputEl.value = getVaultPassword(decodedRoom.toLowerCase().replace(/[^a-z0-9-_]/g, ''));
     }
 
     document.getElementById('roomInput').addEventListener('input', (e) => {
-        passwordInputEl.style.display = 'block';
-        passwordInputEl.placeholder = "Password (Optional)";
+        document.getElementById('passwordField').hidden = false;
+        passwordInputEl.removeAttribute('aria-invalid');
         passwordInputEl.value = getVaultPassword(e.target.value.trim().toLowerCase().replace(/[^a-z0-9-_]/g, ''));
     });
 });
@@ -62,11 +63,15 @@ async function initiateCall() {
     const passwordInputEl = document.getElementById('passwordInput');
     const password = passwordInputEl.value.trim();
 
-    if (!roomName || !nickname) return alert("Please enter a room name and nickname.");
+    if (!roomName || !nickname) {
+        showGateError(!roomName ? 'Enter a room name using letters, numbers, - or _.' : 'Enter the name others will see.', !roomName ? 'roomInput' : 'nameInput');
+        return;
+    }
+    showGateError('');
 
     const joinBtn = document.getElementById('joinBtn');
     joinBtn.disabled = true;
-    joinBtn.innerText = "Authenticating...";
+    joinBtn.innerText = "Connecting…";
 
     try {
         const tokenRes = await fetch('/api/token', {
@@ -77,25 +82,24 @@ async function initiateCall() {
         const connectionInfo = await tokenRes.json();
         
         if (connectionInfo.requiresPassword || (connectionInfo.error && connectionInfo.error.toLowerCase().includes('password'))) {
-            passwordInputEl.style.display = 'block'; 
-            
+            document.getElementById('passwordField').hidden = false;
             if (connectionInfo.error && connectionInfo.error.toLowerCase().includes('incorrect')) {
                 passwordInputEl.value = ''; 
-                passwordInputEl.placeholder = "Incorrect Password - Try Again";
+                showGateError('That password is not right. Try again.', 'passwordInput');
             } else {
-                passwordInputEl.placeholder = "Room Password Required";
+                showGateError('This room is protected. Enter its password.', 'passwordInput');
             }
             
             passwordInputEl.focus();
             joinBtn.disabled = false;
-            joinBtn.innerText = "Join with Password";
+            joinBtn.innerText = "Join with password";
             return; 
         }
 
         if (connectionInfo.error) {
-            alert("Authorization Error: " + connectionInfo.error);
+            showGateError('Could not join: ' + connectionInfo.error);
             joinBtn.disabled = false;
-            joinBtn.innerText = "Connect Session";
+            joinBtn.innerText = "Connect";
             return;
         }
 
@@ -119,7 +123,7 @@ async function initiateCall() {
         document.getElementById('control-dock').style.display = 'flex';
         document.getElementById('headerRoomLabel').innerText = roomName;
 
-        joinBtn.innerText = "Opening Camera...";
+        joinBtn.innerText = "Opening camera…";
 
         const audioConstraints = {
             echoCancellation: true,
@@ -163,19 +167,19 @@ async function initiateCall() {
             try {
                 AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ audio: audioConstraints });
                 videoEnabled = false;
-                alert("Camera not found or blocked. Joining with audio only.");
+                showToast("No camera available, so you joined with audio only.", "warn", 5000);
             } catch (audioErr) {
                 console.warn("[Hardware] Failed audio-only, trying video-only...", audioErr);
                 try {
                     AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ video: initialVideoProfile });
                     audioEnabled = false;
-                    alert("Microphone not found or blocked. Joining with video only.");
+                    showToast("No microphone available, so you joined with video only.", "warn", 5000);
                 } catch (videoErr) {
                     console.warn("[Hardware] Complete hardware failure.", videoErr);
                     AppState.preWarmedTracks = [];
                     audioEnabled = false;
                     videoEnabled = false;
-                    alert("Could not access camera or microphone. Joining in Listen-Only mode.");
+                    showToast("No camera or microphone available, so you joined to listen only.", "warn", 5000);
                 }
             }
         }
@@ -183,12 +187,12 @@ async function initiateCall() {
         if (!audioEnabled) {
             AppState.micMuted = true;
             const micBtn = document.getElementById('btnMic');
-            if (micBtn) { micBtn.innerText = "Unmute"; micBtn.classList.add('active-off'); }
+            if (micBtn) { setDockLabel(micBtn, "Unmute"); micBtn.classList.add('active-off'); }
         }
         if (!videoEnabled) {
             AppState.camMuted = true;
             const camBtn = document.getElementById('btnCam');
-            if (camBtn) { camBtn.innerText = "Start"; camBtn.classList.add('active-off'); }
+            if (camBtn) { setDockLabel(camBtn, "Start"); camBtn.classList.add('active-off'); }
         }
 
         const localVideoTrack = AppState.preWarmedTracks.find(t => t.kind === 'video');
@@ -289,7 +293,7 @@ async function initiateCall() {
         await syncRoomTransmissions(roomName);
 
     } catch (err) {
-        alert("WebRTC Connection Failed: " + err.message);
+        showToast("Connection failed: " + err.message, "error", 6000);
         terminateSession(true);
     }
 }
@@ -309,4 +313,52 @@ let layoutFrame = 0;
 window.addEventListener('resize', () => {
     if (layoutFrame) return;
     layoutFrame = requestAnimationFrame(() => { layoutFrame = 0; recalculateLayout(); });
+});
+
+// === GATE: real form (Enter submits), inline errors, live channel preview ===
+function sanitizeRoom(v) { return v.trim().toLowerCase().replace(/[^a-z0-9-_]/g, ''); }
+
+function showGateError(message, fieldId) {
+    const el = document.getElementById('gateError');
+    if (el) el.textContent = message;
+    ['roomInput', 'nameInput', 'passwordInput'].forEach(id => document.getElementById(id)?.removeAttribute('aria-invalid'));
+    if (fieldId) {
+        const f = document.getElementById(fieldId);
+        f?.setAttribute('aria-invalid', 'true');
+        f?.focus();
+    }
+}
+
+function updateRoomHint() {
+    const input = document.getElementById('roomInput');
+    const hint = document.getElementById('roomHint');
+    if (!input || !hint) return;
+    const clean = sanitizeRoom(input.value);
+    hint.innerHTML = '';
+    if (!clean) return;
+    hint.append('Joins ');
+    const b = document.createElement('b');
+    b.textContent = '#' + clean;
+    hint.append(b);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('gateForm');
+    form?.addEventListener('submit', (e) => { e.preventDefault(); initiateCall(); });
+    document.getElementById('roomInput')?.addEventListener('input', updateRoomHint);
+    updateRoomHint();
+});
+
+// === MENUS & DRAWER: Escape and outside click close them ===
+const MENU_IDS = ['camMenu', 'micMenu', 'reactionMenu'];
+function closeMenus() { MENU_IDS.forEach(id => { const m = document.getElementById(id); if (m) m.style.display = 'none'; }); }
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const anyOpen = MENU_IDS.some(id => document.getElementById(id)?.style.display === 'flex');
+    if (anyOpen) { closeMenus(); return; }
+    if (document.body.classList.contains('chat-open')) toggleChat();
+});
+document.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#camMenu, #micMenu, #reactionMenu, #btnMic, #btnCam, #btnReact')) return;
+    closeMenus();
 });

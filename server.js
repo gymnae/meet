@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
+import compression from 'compression';
 import Database from 'better-sqlite3';
 import { AccessToken } from 'livekit-server-sdk';
 import { fileURLToPath } from 'url';
@@ -63,8 +64,16 @@ const upload = multer({
     limits: { fileSize: 200 * 1024 * 1024 }
 });
 
+app.use(compression());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+    etag: true,
+    lastModified: true,
+    setHeaders(res, filePath) {
+        // HTML always revalidates; CSS/JS revalidate via ETag after one hour.
+        res.setHeader('Cache-Control', filePath.endsWith('.html') ? 'no-cache' : 'public, max-age=3600, stale-while-revalidate=86400');
+    }
+}));
 
 // Hash helper
 function hashPassword(pass) {

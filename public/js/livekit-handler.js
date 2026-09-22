@@ -1,5 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
-import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge } from './ui.js';
+import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
 
 export function ensureParticipantTile(participant, streamSource = 'camera') {
@@ -33,16 +33,24 @@ export function ensureParticipantTile(participant, streamSource = 'camera') {
         const variant = hash % 6;
 
         tile.innerHTML = `
-            <div class="touch-shield"></div>
-            <div class="hand-badge">🖐️</div>
+            <div class="touch-shield" role="button" tabindex="0" aria-pressed="false" aria-label="Pin ${escapeAttr(isScreenShare ? rawCleanName + ' screen' : rawCleanName)}"></div>
+            <div class="hand-badge" role="img" aria-label="Hand raised"><svg class="icon" aria-hidden="true"><use href="#i-hand"/></svg></div>
             <div class="avatar-placeholder av${variant}"><div class="cyber-avatar"><div class="ca-ear l"></div><div class="ca-ear r"></div><div class="ca-head"></div><div class="ca-hair"></div><div class="ca-visor"></div><div class="ca-body"></div></div></div>
             <div class="name-tag">${isScreenShare ? `${rawCleanName} (Screen)` : rawCleanName}</div>
         `;
         
-        tile.querySelector('.touch-shield').addEventListener('click', () => {
+        const shield = tile.querySelector('.touch-shield');
+        const togglePin = () => {
             if (targetTileId === 'tile_local_camera') return;
             AppState.pinnedTileId = (AppState.pinnedTileId === targetTileId) ? null : targetTileId;
             recalculateLayout();
+        };
+        if (targetTileId === 'tile_local_camera') {
+            ['role', 'tabindex', 'aria-pressed', 'aria-label'].forEach(a => shield.removeAttribute(a));
+        }
+        shield.addEventListener('click', togglePin);
+        shield.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePin(); }
         });
 
         document.getElementById('videoGrid').appendChild(tile);
@@ -196,7 +204,7 @@ export function toggleReactionMenu() {
     menu.innerHTML = '';
     const handBtn = document.createElement('button');
     handBtn.className = 'react-item';
-    handBtn.innerText = AppState.handRaised ? "Lower Hand 🖐️" : "Raise Hand 🖐️";
+    handBtn.innerText = AppState.handRaised ? "Lower hand" : "Raise hand";
     handBtn.onclick = (e) => {
         e.preventDefault(); e.stopPropagation();
         AppState.handRaised = !AppState.handRaised;
@@ -241,11 +249,11 @@ export function checkMassMuteRules() {
             AppState.micMuted = true;
             const btn = document.getElementById('btnMic');
             if (btn) {
-                btn.innerText = "Unmute";
+                setDockLabel(btn, "Unmute");
                 btn.classList.add('active-off');
             }
             AppState.activeRoom.localParticipant.setMicrophoneEnabled(false);
-            alert("Room reached >5 participants. Microphone auto-muted.");
+            showToast("More than 5 people joined, so your microphone was muted. Unmute any time.", "warn", 5000);
         }
     }
 }
@@ -280,7 +288,7 @@ export async function toggleMic() {
         if (needsPermission) {
             const requestRow = document.createElement('button');
             requestRow.className = 'cam-item';
-            requestRow.innerText = "Allow Microphone Access";
+            requestRow.innerText = "Allow microphone access";
             requestRow.onclick = async (e) => {
                 e.preventDefault(); e.stopPropagation();
                 micMenu.style.display = 'none';
@@ -291,21 +299,21 @@ export async function toggleMic() {
                     stream.getTracks().forEach(t => t.stop());
                     toggleMic();
                 } catch (err) {
-                    alert("Microphone access is blocked by browser settings.");
+                    showToast("Microphone access is blocked. Allow it in your browser's site settings.", "error", 5000);
                 }
             };
             micMenu.appendChild(requestRow);
         } else {
             const disableRow = document.createElement('button');
             disableRow.className = 'cam-item turn-off';
-            disableRow.innerText = "Mute Microphone";
+            disableRow.innerText = "Mute microphone";
             if (AppState.micMuted) disableRow.disabled = true;
             
             disableRow.onclick = async (e) => {
                 e.preventDefault(); e.stopPropagation();
                 micMenu.style.display = 'none';
                 AppState.micMuted = true;
-                btn.innerText = "Unmute";
+                setDockLabel(btn, "Unmute");
                 btn.classList.add('active-off');
                 try { await AppState.activeRoom.localParticipant.setMicrophoneEnabled(false); } catch(err) {}
             };
@@ -322,7 +330,7 @@ export async function toggleMic() {
                 
                 if (isActive) {
                     optionRow.disabled = true;
-                    optionRow.innerText = `${label} (Active)`;
+                    optionRow.innerText = `${label} (active)`;
                 }
                 
                 optionRow.onclick = async (e) => {
@@ -347,7 +355,7 @@ export async function toggleMic() {
                         }
                         
                         AppState.micMuted = false;
-                        btn.innerText = "Mic";
+                        setDockLabel(btn, "Mic");
                         btn.classList.remove('active-off');
                     } catch (err) {
                         console.error("[Hardware] Mic switch failed", err);
@@ -383,7 +391,7 @@ export async function toggleCam() {
         if (needsPermission) {
             const requestRow = document.createElement('button');
             requestRow.className = 'cam-item';
-            requestRow.innerText = "Allow Camera Access";
+            requestRow.innerText = "Allow camera access";
             requestRow.onclick = async (e) => {
                 e.preventDefault(); e.stopPropagation();
                 menu.style.display = 'none';
@@ -392,7 +400,7 @@ export async function toggleCam() {
                     stream.getTracks().forEach(t => t.stop()); 
                     toggleCam();
                 } catch (err) {
-                    alert("Camera access is blocked by browser settings.");
+                    showToast("Camera access is blocked. Allow it in your browser's site settings.", "error", 5000);
                 }
             };
             menu.appendChild(requestRow);
@@ -409,9 +417,9 @@ export async function toggleCam() {
             videoDevices.forEach(device => {
                 const rawLabel = device.label.toLowerCase();
                 if (rawLabel.includes('front') || rawLabel.includes('vorder') || rawLabel.includes('facetime')) {
-                    if (!processedFront) { uniqueSimplifiedDevices.push({ id: device.deviceId, name: "Front Camera" }); processedFront = true; }
+                    if (!processedFront) { uniqueSimplifiedDevices.push({ id: device.deviceId, name: "Front camera" }); processedFront = true; }
                 } else if (rawLabel.includes('back') || rawLabel.includes('rück') || rawLabel.includes('rear') || rawLabel.includes('environment')) {
-                    if (!processedBack) { uniqueSimplifiedDevices.push({ id: device.deviceId, name: "Rear Camera" }); processedBack = true; }
+                    if (!processedBack) { uniqueSimplifiedDevices.push({ id: device.deviceId, name: "Rear camera" }); processedBack = true; }
                 } else {
                     uniqueSimplifiedDevices.push({ id: device.deviceId, name: device.label || `Camera ${uniqueSimplifiedDevices.length + 1}` });
                 }
@@ -426,7 +434,7 @@ export async function toggleCam() {
                 e.preventDefault(); e.stopPropagation();
                 menu.style.display = 'none';
                 AppState.camMuted = true;
-                btn.innerText = "Start";
+                setDockLabel(btn, "Start");
                 btn.classList.add('active-off'); 
                 
                 const cameraPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
@@ -451,7 +459,7 @@ export async function toggleCam() {
                 const isCurrentActiveLens = !AppState.camMuted && (device.id === AppState.currentCameraDeviceId);
                 if (isCurrentActiveLens) {
                     optionRow.disabled = true; 
-                    optionRow.innerText = `${device.name} (Active)`;
+                    optionRow.innerText = `${device.name} (active)`;
                 }
 
                 optionRow.onclick = async (e) => {
@@ -459,7 +467,7 @@ export async function toggleCam() {
                     menu.style.display = 'none';
                     AppState.camMuted = false;
                     AppState.currentCameraDeviceId = device.id; 
-                    btn.innerText = "Cam";
+                    setDockLabel(btn, "Cam");
                     btn.classList.remove('active-off'); 
 
                     try {
@@ -533,12 +541,12 @@ export async function toggleScreenShare() {
             { audio: false },
             { videoCodec: AppState.currentPublishedCodec, simulcast: true }
         );
-        btn.innerText = AppState.screenSharingActive ? "Stop" : "Share";
-        AppState.screenSharingActive ? btn.classList.add('active-off') : btn.classList.remove('active-off');
+        setDockLabel(btn, AppState.screenSharingActive ? "Stop" : "Share");
+        btn.classList.toggle('active-on', !!AppState.screenSharingActive);
     } catch (e) {
         AppState.screenSharingActive = false;
-        document.getElementById('btnScreen').classList.remove('active-off');
-        document.getElementById('btnScreen').innerText = "Share";
+        document.getElementById('btnScreen').classList.remove('active-on');
+        setDockLabel(document.getElementById('btnScreen'), "Share");
     }
 }
 
@@ -581,4 +589,8 @@ export function terminateSession(shouldReload = true) {
         AppState.activeRoom = null;
     }
     if (shouldReload) location.reload();
+}
+
+function escapeAttr(str) {
+    return String(str || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
 }
