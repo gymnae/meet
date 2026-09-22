@@ -7,6 +7,10 @@ import {
     broadcastCodecPreference, evaluateAndNegotiateCodec
 } from './livekit-handler.js';
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
+import {
+    normalizeOutgoingMicTrack,
+    attachNormalizedRemoteAudio, detachNormalizedRemoteAudio
+} from './audio-normalizer.js';
 import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
 import { initCapabilityChecks, refreshControlVisibility } from './capabilities.js';
@@ -215,14 +219,26 @@ async function initiateCall() {
             if (track.kind === LivekitClient.Track.Kind.Video) {
                 attachParticipantVideoTrack(track, participant, publication.source);
             } else if (track.kind === LivekitClient.Track.Kind.Audio) {
-                const element = track.attach();
-                document.body.appendChild(element);
+                if (publication.source === LivekitClient.Track.Source.Microphone || publication.source === 'unknown') {
+                    // Normalize remote microphone audio for consistent loudness
+                    const element = attachNormalizedRemoteAudio(track);
+                    document.body.appendChild(element);
+                } else {
+                    // Screen share / other audio stays untouched
+                    const element = track.attach();
+                    document.body.appendChild(element);
+                }
                 ensureParticipantTile(participant, 'camera');
             }
         });
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-            track.detach().forEach(el => el.remove());
+            if (track.kind === LivekitClient.Track.Kind.Audio &&
+                (publication.source === LivekitClient.Track.Source.Microphone || publication.source === 'unknown')) {
+                detachNormalizedRemoteAudio(track);
+            } else {
+                track.detach().forEach(el => el.remove());
+            }
             cleanupTileTrack(participant.identity, publication.source);
         });
 
@@ -274,7 +290,12 @@ async function initiateCall() {
                     simulcast: true
                 });
             } else {
-                await AppState.activeRoom.localParticipant.publishTrack(track);
+                // Publish the normalized version of the mic track
+                const normalizedTrack = normalizeOutgoingMicTrack(track.mediaStreamTrack);
+                const publishable = normalizedTrack !== track.mediaStreamTrack
+                    ? new LivekitClient.LocalAudioTrack(normalizedTrack)
+                    : track;
+                await AppState.activeRoom.localParticipant.publishTrack(publishable);
             }
         }
 

@@ -1,4 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
+import { normalizeOutgoingMicTrack, teardownOutgoingNormalization, teardownAllNormalization } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
 
@@ -336,13 +337,18 @@ export async function toggleMic() {
                                 await AppState.activeRoom.localParticipant.unpublishTrack(audioPub.audioTrack);
                                 audioPub.audioTrack.stop();
                             }
-                            const newMicTrack = await LivekitClient.createLocalAudioTrack({ 
+                            const newMicTrack = await LivekitClient.createLocalAudioTrack({
                                 deviceId: device.deviceId,
                                 echoCancellation: true,
                                 noiseSuppression: true,
                                 autoGainControl: true
                             });
-                            await AppState.activeRoom.localParticipant.publishTrack(newMicTrack);
+                            const normalizedMediaTrack = normalizeOutgoingMicTrack(newMicTrack.mediaStreamTrack);
+                            const publishableTrack = normalizedMediaTrack !== newMicTrack.mediaStreamTrack
+                                ? new LivekitClient.LocalAudioTrack(normalizedMediaTrack)
+                                : newMicTrack;
+                            await AppState.activeRoom.localParticipant.publishTrack(publishableTrack);
+                            teardownOutgoingNormalization(newMicTrack.mediaStreamTrack);
                         }
                         
                         AppState.micMuted = false;
@@ -572,6 +578,7 @@ export function cleanupAllTilesForParticipant(participantIdentity) {
 }
 
 export function terminateSession(shouldReload = true) {
+    teardownAllNormalization();
     document.body.classList.remove('in-session');
     AppState.preWarmedTracks.forEach(track => { try { track.stop(); } catch(e){} });
     AppState.preWarmedTracks = [];
