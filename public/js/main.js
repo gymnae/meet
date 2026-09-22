@@ -73,10 +73,19 @@ async function initiateCall() {
     joinBtn.innerText = "Authenticating...";
 
     try {
+        // Persistent anonymous client ID (localStorage, not a cookie):
+        // reconnects on the same device/browser reuse the same ID, so the
+        // all-time unique user count doesn't double-count.
+        let clientId = localStorage.getItem('portal_client_id');
+        if (!clientId) {
+            clientId = crypto.randomUUID();
+            localStorage.setItem('portal_client_id', clientId);
+        }
+
         const tokenRes = await fetch('/api/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ roomName, nickname, password })
+            body: JSON.stringify({ roomName, nickname, password, clientId })
         });
         const connectionInfo = await tokenRes.json();
         
