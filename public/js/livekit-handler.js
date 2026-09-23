@@ -1,4 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
+import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
 
@@ -331,7 +332,7 @@ export async function toggleMic() {
                 optionRow.innerText = label;
                 
                 const audioPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
-                const isActive = !AppState.micMuted && audioPub && audioPub.audioTrack && audioPub.audioTrack.mediaStreamTrack.getSettings().deviceId === device.deviceId;
+                const isActive = !AppState.micMuted && audioPub && audioPub.audioTrack && getOutgoingSourceTrack(audioPub.audioTrack.mediaStreamTrack).getSettings().deviceId === device.deviceId;
                 
                 if (isActive) {
                     optionRow.disabled = true;
@@ -343,21 +344,28 @@ export async function toggleMic() {
                     micMenu.style.display = 'none';
                     
                     try {
-                        if (audioPub && audioPub.audioTrack && !audioPub.isMuted) {
-                            await AppState.activeRoom.switchActiveDevice('audioinput', device.deviceId);
-                        } else {
-                            if (audioPub && audioPub.audioTrack) {
-                                await AppState.activeRoom.localParticipant.unpublishTrack(audioPub.audioTrack);
-                                audioPub.audioTrack.stop();
-                            }
-                            const newMicTrack = await LivekitClient.createLocalAudioTrack({ 
-                                deviceId: device.deviceId,
-                                echoCancellation: true,
-                                noiseSuppression: true,
-                                autoGainControl: true
-                            });
-                            await AppState.activeRoom.localParticipant.publishTrack(newMicTrack);
+                        // Always republish: switchActiveDevice would restart the published
+                        // track with a raw mic and bypass the normalization graph.
+                        if (audioPub && audioPub.audioTrack) {
+                            const oldMediaTrack = audioPub.audioTrack.mediaStreamTrack;
+                            await AppState.activeRoom.localParticipant.unpublishTrack(audioPub.audioTrack);
+                            audioPub.audioTrack.stop();
+                            releaseOutgoingForPublished(oldMediaTrack);
                         }
+                        const newMicTrack = await LivekitClient.createLocalAudioTrack({
+                            deviceId: device.deviceId,
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        });
+                        const normalizedMediaTrack = normalizeOutgoingMicTrack(newMicTrack.mediaStreamTrack);
+                        const publishableTrack = normalizedMediaTrack !== newMicTrack.mediaStreamTrack
+                            ? new LivekitClient.LocalAudioTrack(normalizedMediaTrack)
+                            : newMicTrack;
+                        // Tag as microphone so setMicrophoneEnabled / getTrackPublication find it
+                        await AppState.activeRoom.localParticipant.publishTrack(publishableTrack, {
+                            source: LivekitClient.Track.Source.Microphone
+                        });
                         
                         AppState.micMuted = false;
                         setDockLabel(btn, "Mic");
@@ -586,6 +594,7 @@ export function cleanupAllTilesForParticipant(participantIdentity) {
 }
 
 export function terminateSession(shouldReload = true) {
+    teardownAllNormalization();
     document.body.classList.remove('in-session');
     AppState.preWarmedTracks.forEach(track => { try { track.stop(); } catch(e){} });
     AppState.preWarmedTracks = [];

@@ -26,6 +26,12 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy the rest of your raw application files
 COPY . .
 
+# Run as an unprivileged regular user (high UID/GID, not a system user)
+RUN groupadd -g 10001 meet && useradd -u 10001 -g meet -m -s /usr/sbin/nologin meet \
+    && mkdir -p /app/data \
+    && chown -R meet:meet /app
+USER 10001:10001
+
 EXPOSE 3000
 
 CMD ["node", "server.js"]
