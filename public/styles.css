@@ -130,7 +130,7 @@ a { color: var(--role-info); }
 /* Stepped pixel corners (progressive: square where unsupported) */
 @supports (corner-shape: notch) {
     .setup-box, .primary-btn, .secondary-btn, .share-btn, .dock-btn, .video-tile,
-    #camMenu, #reactionMenu, #micMenu, .chat-drawer, .toast, .file-card, .file-dl-btn,
+    #camMenu, #reactionMenu, #micMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn,
     .avatar-placeholder, .name-tag, .field input {
         corner-shape: notch;
         border-radius: var(--notch);
@@ -581,7 +581,7 @@ body.gutter-dragging .video-tile { pointer-events: none; }
 /* --------------------------------------------------------------------------
    6. Menus (mic, camera, reactions)
    -------------------------------------------------------------------------- */
-#camMenu, #reactionMenu, #micMenu {
+#camMenu, #reactionMenu, #micMenu, #soundMenu {
     display: none;
     position: absolute;
     bottom: 96px; left: 50%;
@@ -630,6 +630,73 @@ body.gutter-dragging .video-tile { pointer-events: none; }
     .cam-item:hover:not(:disabled), .react-item:hover, .react-emoji-btn:hover { background: var(--surface-3); border-color: var(--role-info); }
     .cam-item.turn-off:hover { background: var(--red-600); border-color: var(--red-600); }
 }
+
+/* Sound panel: leveling, volumes, mic processing */
+#soundMenu {
+    /* opened from the header, so it hangs from the top-right of the video area */
+    top: var(--s-2); right: var(--s-2); bottom: auto; left: auto;
+    transform: none;
+    width: 320px;
+    gap: var(--s-3);
+    max-height: calc(100% - var(--s-4));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+/* keep clear of the open chat drawer (340px wide, 10px inset) */
+@media (min-width: 769px) { body.chat-open #soundMenu { right: calc(350px + var(--s-2)); } }
+.sound-section { display: flex; flex-direction: column; gap: var(--s-2); }
+.sound-section + .sound-section { padding-top: var(--s-3); border-top: 1px solid var(--line); }
+.sound-heading {
+    margin: 0;
+    font-size: var(--fs-small);
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-2);
+}
+.sound-subheading { margin: var(--s-1) 0 0; font-size: var(--fs-small); color: var(--text-3); }
+.sound-label {
+    min-width: 0;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    color: var(--text-1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sound-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.sound-seg { display: flex; flex: none; border: 1px solid var(--line); }
+.sound-seg button {
+    min-height: 36px;
+    padding: 0 var(--s-3);
+    font: 600 var(--fs-small)/1 var(--font-ui);
+    color: var(--text-2);
+    background: var(--surface-2);
+    border: 0;
+    cursor: pointer;
+}
+.sound-seg button + button { border-left: 1px solid var(--line); }
+.sound-seg button[aria-checked="true"] { color: var(--ink); background: var(--role-info); }
+@media (hover: hover) { .sound-seg button[aria-checked="false"]:hover { color: var(--text-1); background: var(--surface-3); } }
+
+.sound-slider {
+    display: grid;
+    grid-template-columns: minmax(0, 7.5rem) 1fr 3.25rem;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: 36px;
+}
+.sound-slider input { width: 100%; margin: 0; accent-color: var(--role-info); cursor: pointer; }
+.sound-slider output { font: var(--fs-small)/1 var(--font-mono); color: var(--text-2); text-align: right; }
+
+.sound-toggle {
+    display: flex; align-items: center; gap: var(--s-2);
+    min-height: 36px;
+    font-size: var(--fs-small);
+    color: var(--text-1);
+    cursor: pointer;
+}
+.sound-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--role-info); cursor: pointer; }
+.sound-toggle input:disabled, .sound-toggle input:disabled + span { opacity: .5; cursor: progress; }
+.sound-reset { justify-content: center; flex: none; }
 
 /* --------------------------------------------------------------------------
    7. Badges & reactions

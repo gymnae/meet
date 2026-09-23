@@ -1,5 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
-import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization } from './audio-normalizer.js';
+import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
 
@@ -201,6 +201,7 @@ export function toggleReactionMenu() {
     const micMenu = document.getElementById('micMenu');
     if (camMenu) camMenu.style.display = 'none';
     if (micMenu) micMenu.style.display = 'none';
+    hideSoundMenu();
 
     if (menu.style.display === 'flex') {
         menu.style.display = 'none';
@@ -264,6 +265,37 @@ export function checkMassMuteRules() {
     }
 }
 
+/** Device id of the raw mic behind the published microphone track, if any. */
+export function getActiveMicDeviceId() {
+    const audioPub = AppState.activeRoom?.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+    if (!audioPub || !audioPub.audioTrack) return undefined;
+    return getOutgoingSourceTrack(audioPub.audioTrack.mediaStreamTrack).getSettings().deviceId;
+}
+
+/**
+ * (Re)publishes the microphone on the given device with the current browser
+ * processing settings. Always republishes: switchActiveDevice / restartTrack
+ * would restart the published track with a raw mic and bypass the graph.
+ */
+export async function republishMic(deviceId) {
+    const audioPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+    if (audioPub && audioPub.audioTrack) {
+        const oldMediaTrack = audioPub.audioTrack.mediaStreamTrack;
+        await AppState.activeRoom.localParticipant.unpublishTrack(audioPub.audioTrack);
+        audioPub.audioTrack.stop();
+        releaseOutgoingForPublished(oldMediaTrack);
+    }
+    const newMicTrack = await LivekitClient.createLocalAudioTrack({ deviceId, ...getMicConstraints() });
+    const normalizedMediaTrack = normalizeOutgoingMicTrack(newMicTrack.mediaStreamTrack);
+    const publishableTrack = normalizedMediaTrack !== newMicTrack.mediaStreamTrack
+        ? new LivekitClient.LocalAudioTrack(normalizedMediaTrack)
+        : newMicTrack;
+    // Tag as microphone so setMicrophoneEnabled / getTrackPublication find it
+    await AppState.activeRoom.localParticipant.publishTrack(publishableTrack, {
+        source: LivekitClient.Track.Source.Microphone
+    });
+}
+
 export async function toggleMic() {
     if (!AppState.activeRoom) return;
 
@@ -278,6 +310,7 @@ export async function toggleMic() {
     const reactMenu = document.getElementById('reactionMenu');
     if (camMenu) camMenu.style.display = 'none';
     if (reactMenu) reactMenu.style.display = 'none';
+    hideSoundMenu();
 
     const btn = document.getElementById('btnMic');
     
@@ -300,7 +333,7 @@ export async function toggleMic() {
                 micMenu.style.display = 'none';
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                        audio: getMicConstraints()
                     });
                     stream.getTracks().forEach(t => t.stop());
                     toggleMic();
@@ -344,29 +377,7 @@ export async function toggleMic() {
                     micMenu.style.display = 'none';
                     
                     try {
-                        // Always republish: switchActiveDevice would restart the published
-                        // track with a raw mic and bypass the normalization graph.
-                        if (audioPub && audioPub.audioTrack) {
-                            const oldMediaTrack = audioPub.audioTrack.mediaStreamTrack;
-                            await AppState.activeRoom.localParticipant.unpublishTrack(audioPub.audioTrack);
-                            audioPub.audioTrack.stop();
-                            releaseOutgoingForPublished(oldMediaTrack);
-                        }
-                        const newMicTrack = await LivekitClient.createLocalAudioTrack({
-                            deviceId: device.deviceId,
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        });
-                        const normalizedMediaTrack = normalizeOutgoingMicTrack(newMicTrack.mediaStreamTrack);
-                        const publishableTrack = normalizedMediaTrack !== newMicTrack.mediaStreamTrack
-                            ? new LivekitClient.LocalAudioTrack(normalizedMediaTrack)
-                            : newMicTrack;
-                        // Tag as microphone so setMicrophoneEnabled / getTrackPublication find it
-                        await AppState.activeRoom.localParticipant.publishTrack(publishableTrack, {
-                            source: LivekitClient.Track.Source.Microphone
-                        });
-                        
+                        await republishMic(device.deviceId);
                         AppState.micMuted = false;
                         setDockLabel(btn, "Mic");
                         btn.classList.remove('active-off');
@@ -390,6 +401,7 @@ export async function toggleCam() {
     const micMenu = document.getElementById('micMenu');
     if (reactMenu) reactMenu.style.display = 'none';
     if (micMenu) micMenu.style.display = 'none';
+    hideSoundMenu();
     
     const btn = document.getElementById('btnCam');
     if (menu.style.display === 'flex') { menu.style.display = 'none'; return; }
@@ -607,4 +619,9 @@ export function terminateSession(shouldReload = true) {
 
 function escapeAttr(str) {
     return String(str || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+}
+
+function hideSoundMenu() {
+    const soundMenu = document.getElementById('soundMenu');
+    if (soundMenu) soundMenu.style.display = 'none';
 }
