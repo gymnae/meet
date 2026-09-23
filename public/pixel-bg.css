@@ -13,11 +13,7 @@
   background:#0a0b10;
   contain:layout paint;
 }
-.setup-box,.repo-link,#room-header,#video-container,#control-dock{position:relative;z-index:1;}
-.setup-box{background:rgba(18,19,36,.92);}
-#room-header,#control-dock{background:rgba(13,14,27,.86);}
-#video-container{background:transparent;}
-.video-tile{background:rgba(17,18,34,.93);}
+/* App layering and surfaces live in styles.css (design tokens). */
 
 /* TRUE DIAGONAL, resize-safe: overscan via negative insets (relative to
    fixed .px-bg, so it tracks any viewport), rotated as one rigid sheet.
@@ -79,7 +75,7 @@
 }
 .px-actor{position:absolute; bottom:20%; z-index:3;}
 .px-bubble{
-  position:absolute; z-index:4; font-size:10px; font-weight:900;
+  position:absolute; z-index:4; font-size:.875rem; font-weight:700; line-height:1.2; white-space:nowrap;
   background:#0d0e1b; border:2px solid var(--cyan); color:#fff; padding:3px 6px; border-radius:3px;
 }
 .px-bubble.pink{border-color:var(--pink);}
@@ -101,7 +97,7 @@
 .sc-a .laptop .base{width:72px; height:9px; margin-left:-4px; background:#2b2d4a; box-shadow:0 0 0 2px #0a0b10;}
 .sc-a .mug{position:absolute; left:276px; bottom:calc(20% + 12px); width:16px; height:20px; background:var(--cyan); box-shadow:0 0 0 2px #0a0b10; z-index:3;}
 .sc-a .bubble1{left:96px; bottom:66%;}
-.sc-a .bubble2{left:206px; bottom:74%; font-size:9px;}
+.sc-a .bubble2{left:196px; bottom:74%;}
 
 /* SCENE B — cyborg */
 .sc-b .cy{left:88px;}
@@ -138,7 +134,7 @@
 .sc-c .bubble2{left:230px; bottom:78%;}
 
 /* SCENE D — VR bar */
-.sc-d .neon{position:absolute; left:50%; top:6px; transform:translateX(-50%); font-size:14px; font-weight:900; letter-spacing:3px; color:var(--pink); text-shadow:2px 2px 0 var(--cyan); z-index:4; white-space:nowrap;}
+.sc-d .neon{position:absolute; left:50%; top:6px; transform:translateX(-50%); font-size:.875rem; font-weight:800; letter-spacing:2px; color:var(--pink); text-shadow:2px 2px 0 var(--cyan); z-index:4; white-space:nowrap;}
 .sc-d .shelf{position:absolute; left:16px; right:16px; top:32%; height:6px; background:#0a0b10; border:1px solid var(--cyan); z-index:2;}
 .sc-d .bottles{position:absolute; left:24px; top:17%; width:310px; height:24px; background:linear-gradient(var(--cyan),transparent) 0 8px/12px 18px no-repeat,linear-gradient(var(--pink),transparent) 30px 4px/12px 22px no-repeat,linear-gradient(var(--yellow),transparent) 60px 8px/12px 18px no-repeat,linear-gradient(var(--green),transparent) 90px 2px/12px 24px no-repeat,linear-gradient(var(--cyan),transparent) 150px 6px/12px 20px no-repeat,linear-gradient(var(--pink),transparent) 200px 8px/12px 18px no-repeat; z-index:2;}
 .sc-d .counter{position:absolute; left:0; right:0; bottom:20%; height:26px; background:linear-gradient(180deg,#3a1c5a,#1b1c3a); border-top:3px solid var(--cyan); z-index:2;}
@@ -164,16 +160,9 @@
    animated bands never show through gaps behind tiles. They stay visible
    outside the main window: login screen, header/dock translucency edges
    and page margins around the container. */
-body.in-session .px-bg{filter:saturate(.65) brightness(.62);}
-body.in-session .px-band__track{animation-duration:140s;}
-body.in-session .px-band--fast .px-band__track{animation-duration:110s;}
-body.in-session .px-band--slow .px-band__track{animation-duration:180s;}
-body.in-session .px-band:nth-child(2),body.in-session .px-band:nth-child(3),body.in-session .px-band:nth-child(4){opacity:.55;}
-body.in-session .sc-c .ball,body.in-session .sc-b .rings i{animation-play-state:paused;}
-body.in-session #video-container{background:#0a0b10;}
-body.in-session .grid{background:#0a0b10;}
-body.in-session .video-tile{background:#111222 !important;}
-body.in-session .avatar-placeholder{background:#0d0e1b;}
+/* In a call the header, dock and grid are opaque, so the art is never seen.
+   Stop rendering it entirely: no compositor layers, no animation, no paint. */
+body.in-session .px-bg{display:none;}
 
 @media (max-width:768px){
   .px-scene{width:260px; flex-basis:260px;}

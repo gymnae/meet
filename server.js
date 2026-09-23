@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
+import compression from 'compression';
 import Database from 'better-sqlite3';
 import { AccessToken } from 'livekit-server-sdk';
 import { fileURLToPath } from 'url';
@@ -63,8 +64,17 @@ const upload = multer({
     limits: { fileSize: 200 * 1024 * 1024 }
 });
 
+app.use(compression());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+    etag: true,
+    lastModified: true,
+    setHeaders(res, filePath) {
+        // File names are not content-hashed, so every asset revalidates (cheap 304s via ETag).
+        // A max-age here would let fresh HTML run against stale JS for up to that long after a deploy.
+        res.setHeader('Cache-Control', 'no-cache');
+    }
+}));
 
 // Hash helper
 function hashPassword(pass) {

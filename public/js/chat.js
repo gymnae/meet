@@ -1,6 +1,6 @@
 import { AppState } from './state.js';
 import { sendDataPacket } from './livekit-handler.js';
-import { playSynthSound, recalculateLayout } from './ui.js';
+import { playSynthSound, recalculateLayout, showToast } from './ui.js';
 
 let isChatOpen = false;
 let unreadCount = 0;
@@ -84,6 +84,7 @@ export function toggleChat() {
     isChatOpen = !isChatOpen;
     drawer.style.display = isChatOpen ? 'flex' : 'none';
     document.body.classList.toggle('chat-open', isChatOpen);
+    document.getElementById('btnChat')?.classList.toggle('active-on', isChatOpen);
 
     if (isChatOpen) {
         unreadCount = 0;
@@ -156,7 +157,7 @@ export function handleFileUpload(e) {
     if (!file || !AppState.activeRoom) return;
 
     if (file.size > 200 * 1024 * 1024) {
-        alert('File size exceeds 200MB limit.');
+        showToast('That file is over the 200 MB limit.', 'error');
         e.target.value = '';
         return;
     }
@@ -193,13 +194,13 @@ export function handleFileUpload(e) {
             sendDataPacket({ type: 'FILE_SHARED', payload: savedFile });
             scrollChatToBottom();
         } else {
-            alert('File upload failed.');
+            showToast('Upload failed. Try again.', 'error');
         }
     };
 
     xhr.onerror = () => {
         if (progressContainer) progressContainer.style.display = 'none';
-        alert('Network error during upload.');
+        showToast('Network error during upload. Check your connection.', 'error');
     };
 
     xhr.send(formData);
@@ -238,7 +239,7 @@ export function renderMessage(msg, isSelfSent) {
     el.innerHTML = `
         <div class="bubble-meta">
             <span class="sender-name">${escapeHtml(msg.sender)}</span>
-            <span class="ttl-pill">${msg.pinned ? '📌 pinned' : '⏳ 60s'}</span>
+            <span class="ttl-pill">${msg.pinned ? 'Pinned' : '60s'}</span>
         </div>
         <div class="chat-body">${formatMessageContent(msg.text)}</div>
     `;
@@ -275,12 +276,12 @@ export function renderFile(file, isSelfSent) {
     el.innerHTML = `
         <div class="file-card-meta">
             <span class="sender-name">${escapeHtml(file.sender)}</span>
-            <span class="ttl-pill">⏳ 10m</span>
+            <span class="ttl-pill">10m 00s</span>
         </div>
-        <div class="file-name" title="${escapeHtml(file.original_name)}">📁 ${escapeHtml(file.original_name)}</div>
+        <div class="file-name" title="${escapeHtml(file.original_name)}">${escapeHtml(file.original_name)}</div>
         <div class="file-size">${sizeFormatted}</div>
         ${imagePreviewHtml}
-        <a class="file-dl-btn" href="/api/files/${file.id}" target="_blank" download="${escapeHtml(file.original_name)}">⬇ Download</a>
+        <a class="file-dl-btn" href="/api/files/${file.id}" target="_blank" download="${escapeHtml(file.original_name)}">Download</a>
     `;
 
     stream.appendChild(el);
@@ -320,15 +321,17 @@ function tickCountdowns() {
         const pill = el.querySelector('.ttl-pill');
         if (!pill) return;
 
+        // The hourglass is drawn by .ttl-pill::before, so the label is text only.
         let label;
         if (type === 'chat') {
-            label = `⏳ ${remaining}s`;
+            label = `${remaining}s`;
         } else {
             const mins = Math.floor(remaining / 60);
             const secs = remaining % 60;
-            label = `⏳ ${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+            label = `${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
         }
         if (pill.textContent !== label) pill.textContent = label;
+        pill.classList.toggle('urgent', remaining <= (type === 'chat' ? 10 : 30));
     });
 }
 

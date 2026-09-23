@@ -1,6 +1,18 @@
 import { AppState } from './state.js';
 import { sendDataPacket } from './livekit-handler.js';
 import { renderFile, renderMessage, scrollChatToBottom, renderSystemNote } from './chat.js';
+import { setDockLabel } from './ui.js';
+
+let recTimer = null;
+function startRecTimer(btn, startTime) {
+    clearInterval(recTimer);
+    const tick = () => {
+        const s = Math.floor((Date.now() - startTime) / 1000);
+        setDockLabel(btn, `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
+    };
+    tick();
+    recTimer = setInterval(tick, 1000);
+}
 
 // === CLIENT-SIDE COMPOSITE RECORDER (Desktop-only entry point) ===
 // Records only the local view: composites existing <video> elements onto a
@@ -43,11 +55,13 @@ export async function toggleRecording() {
 }
 
 function resetRecButton() {
+    clearInterval(recTimer);
     const btn = document.getElementById('btnRec');
     if (btn) {
-        btn.innerText = 'Rec';
-        btn.classList.remove('active-off');
+        setDockLabel(btn, 'Rec');
+        btn.classList.remove('is-recording');
     }
+    document.body.classList.remove('is-recording');
 }
 
 function pickMimeType() {
@@ -193,13 +207,14 @@ async function startRecording() {
         mediaRecorder = recorder;
 
         // Button keeps the "Rec" label — active color scheme signals recording
-        if (btn) btn.classList.add('active-off');
+        if (btn) { btn.classList.add('is-recording'); startRecTimer(btn, startTime); }
+        document.body.classList.add('is-recording');
         broadcastRecordingNotice();
     } catch (err) {
         console.error('[Recorder] Start failed:', err);
         cleanupRecording();
         resetRecButton();
-        renderSystemNote('⚠️ Recording is not supported on this device/browser.');
+        renderSystemNote('Recording is not supported in this browser.');
     } finally {
         recStarting = false;
     }
@@ -255,12 +270,12 @@ async function handleRecordingStopped(recorder, chunks, startTime) {
     const blob = new Blob(chunks, { type });
 
     if (blob.size === 0) {
-        renderSystemNote('⚠️ Recording was empty.');
+        renderSystemNote('The recording was empty, so nothing was shared.');
         return;
     }
 
     const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
-    renderSystemNote(`⏳ Recording stopped (${durationSec}s, ${sizeMB} MB) — preparing upload…`);
+    renderSystemNote(`Recording stopped (${durationSec}s, ${sizeMB} MB). Uploading…`);
 
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -285,14 +300,14 @@ async function handleRecordingStopped(recorder, chunks, startTime) {
                 const savedFile = await res.json();
                 renderFile(savedFile, true);
                 sendDataPacket({ type: 'FILE_SHARED', payload: savedFile });
-                renderSystemNote('✅ Recording shared to chat.');
+                renderSystemNote('Recording shared to chat.');
                 scrollChatToBottom();
                 return;
             }
-            renderSystemNote('⚠️ Upload failed — downloading locally instead.');
+            renderSystemNote('Upload failed, so the recording was downloaded to this device instead.');
         } catch (err) {
             console.error('[Recorder] Chat share failed, falling back to local download:', err);
-            renderSystemNote('⚠️ Upload failed — downloading locally instead.');
+            renderSystemNote('Upload failed, so the recording was downloaded to this device instead.');
         }
     }
 

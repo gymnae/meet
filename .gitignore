@@ -1,0 +1,6 @@
+node_modules/
+.env
+portal.db
+portal.db-shm
+portal.db-wal
+uploads/
