@@ -70,8 +70,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
     lastModified: true,
     setHeaders(res, filePath) {
-        // HTML always revalidates; CSS/JS revalidate via ETag after one hour.
-        res.setHeader('Cache-Control', filePath.endsWith('.html') ? 'no-cache' : 'public, max-age=3600, stale-while-revalidate=86400');
+        // File names are not content-hashed, so every asset revalidates (cheap 304s via ETag).
+        // A max-age here would let fresh HTML run against stale JS for up to that long after a deploy.
+        res.setHeader('Cache-Control', 'no-cache');
     }
 }));
 

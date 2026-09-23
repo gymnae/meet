@@ -226,6 +226,8 @@ The pixel city lives in `pixel-bg.css` and has its own palette, since it is artw
 | Hand raised | Yellow 32 px badge with the pixel hand, top right |
 | Keyboard focus | Cyan ring inset 6 px |
 
+State frames are drawn on the tile's `::after` layer, above the video. An inset shadow would be painted underneath the video and disappear.
+
 The whole tile is a button that pins and unpins. It has an accessible name ("Pin Kaito") and `aria-pressed`. Your own tile is not pinnable. Name tags are 14 px, cyan for others and magenta for you.
 
 ### 6.4 Avatar

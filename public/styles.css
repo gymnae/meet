@@ -379,11 +379,23 @@ body.is-recording .rec-chip { display: inline-flex; }
 }
 @media (hover: hover) { .video-tile:hover { border-color: var(--violet-300); } }
 
-/* state: live audio — hard 4px frame, instant, no blur */
-.video-tile.speaking { border-color: var(--role-live); box-shadow: inset 0 0 0 2px var(--role-live); }
+/* state frame: drawn on ::after so it paints above the video (an inset box-shadow would sit under it) */
+.video-tile::after {
+    content: "";
+    position: absolute; inset: 0;
+    z-index: 9;
+    border: 2px solid transparent;
+    border-radius: inherit;
+    pointer-events: none;
+}
+/* state: live audio — hard 4px frame (border + ring), instant, no blur */
+.video-tile.speaking { border-color: var(--role-live); }
+.video-tile.speaking::after { border-color: var(--role-live); }
 /* state: presentation focus */
-.grid.has-maximized .video-tile.maximized { border-color: var(--role-info); box-shadow: inset 0 0 0 2px var(--role-info); z-index: 5; }
-.grid.has-maximized .video-tile.maximized.speaking { border-color: var(--role-live); box-shadow: inset 0 0 0 2px var(--role-live); }
+.grid.has-maximized .video-tile.maximized { border-color: var(--role-info); z-index: 5; }
+.grid.has-maximized .video-tile.maximized::after { border-color: var(--role-info); }
+.grid.has-maximized .video-tile.maximized.speaking { border-color: var(--role-live); }
+.grid.has-maximized .video-tile.maximized.speaking::after { border-color: var(--role-live); }
 /* state: pinned by the user */
 .video-tile.is-pinned::before {
     content: "Pinned";
@@ -479,7 +491,7 @@ video {
     border-radius: 0 !important;
     transform: translateZ(0) !important;
 }
-#tile_local_camera.speaking { border-color: var(--role-live) !important; box-shadow: inset 0 0 0 2px var(--role-live), var(--elev-2) !important; }
+#tile_local_camera.speaking { border-color: var(--role-live) !important; }
 #tile_local_camera .name-tag { color: var(--role-brand-text); border-color: rgb(255 0 127 / .6); }
 #tile_local_camera video { transform: none; }
 #tile_local_camera.mirror-mode video { transform: scaleX(-1) !important; }
