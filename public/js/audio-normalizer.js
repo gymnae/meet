@@ -78,6 +78,29 @@ export function teardownOutgoingNormalization(originalTrack) {
     } catch (e) { /* noop */ }
 }
 
+function findOutgoingByProcessed(processedTrack) {
+    for (const [originalTrack, proc] of outgoingProcs) {
+        if (proc.processedTrack === processedTrack) return originalTrack;
+    }
+    return null;
+}
+
+/** The raw mic track behind a published normalized track (or the track itself if not normalized). */
+export function getOutgoingSourceTrack(publishedTrack) {
+    return findOutgoingByProcessed(publishedTrack) || publishedTrack;
+}
+
+/**
+ * Releases the graph behind a published normalized track and stops the raw
+ * mic track feeding it (e.g. before republishing on a different device).
+ */
+export function releaseOutgoingForPublished(publishedTrack) {
+    const originalTrack = findOutgoingByProcessed(publishedTrack);
+    if (!originalTrack) return;
+    teardownOutgoingNormalization(originalTrack);
+    try { originalTrack.stop(); } catch (e) { /* noop */ }
+}
+
 /**
  * Attaches a remote microphone track to an <audio> element through the
  * normalization graph. Returns the element (playing normalized audio).

@@ -310,7 +310,10 @@ async function initiateCall() {
                 const publishable = normalizedTrack !== track.mediaStreamTrack
                     ? new LivekitClient.LocalAudioTrack(normalizedTrack)
                     : track;
-                await AppState.activeRoom.localParticipant.publishTrack(publishable);
+                // Tag as microphone so setMicrophoneEnabled / getTrackPublication find it
+                await AppState.activeRoom.localParticipant.publishTrack(publishable, {
+                    source: LivekitClient.Track.Source.Microphone
+                });
             }
         }
 
