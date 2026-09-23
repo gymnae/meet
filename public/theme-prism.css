@@ -1,0 +1,538 @@
+/* ==========================================================================
+   meet. — PRISM theme (glass + spectrum)
+   Layered on the shared tokens in styles.css. Active when
+   <html data-theme="prism">. Spec: design-prism.md.
+
+   The idea: the room is white light, each person is one colour of it.
+   Chrome is colourless glass. Colour is identity. The full spectrum only
+   appears where it means "everyone": the room edge and the join prism.
+   ========================================================================== */
+
+/* Theme-agnostic helpers (both themes load this file) */
+.prism-bg, .wordmark-text, .ic-smooth { display: none; }
+
+:root[data-theme="prism"] {
+    color-scheme: dark;
+
+    /* identity spectrum: 12 hues at equal OKLCH lightness → ~10:1 everywhere */
+    --who-l: 0.82;
+    --who-c: 0.11;
+    --spectrum: linear-gradient(90deg,
+        oklch(.82 .11 15), oklch(.82 .11 75), oklch(.82 .11 135),
+        oklch(.82 .11 195), oklch(.82 .11 255), oklch(.82 .11 315), oklch(.82 .11 345));
+    --spectrum-v: linear-gradient(180deg,
+        oklch(.82 .11 15), oklch(.82 .11 55), oklch(.82 .11 105), oklch(.82 .11 150),
+        oklch(.82 .11 200), oklch(.82 .11 255), oklch(.82 .11 305));
+    --me-color: oklch(var(--who-l) var(--who-c) calc(var(--me-h, 8) * 30deg + 15deg));
+
+    /* surfaces */
+    --void:      #0b0c11;
+    --bg:        #111219;
+    --bar:       rgb(20 21 30 / .88);
+    --surface-1: #181a25;
+    --surface-2: rgb(255 255 255 / .06);
+    --surface-3: rgb(255 255 255 / .11);
+    --scrim:     rgb(17 18 24 / .74);
+    --glass-float: rgb(24 26 37 / .8);    /* ≥ .78: text-3 stays ≥ 4.5:1 over the brightest backdrop */
+    --glass-blur:  blur(22px) saturate(1.4);
+
+    /* text */
+    --text-1: #f6f4fb;
+    --text-2: #c9c5d8;
+    --text-3: #9d99b3;
+    --ink:    #111218;
+
+    /* roles: colourless chrome, inverted light for attention, red for danger */
+    --light:           #eeeaf6;           /* inverted "attention" fill, 15.8:1 with ink */
+    --role-brand:      var(--light);
+    --role-brand-text: var(--text-1);
+    --role-info:       var(--text-1);
+    --role-time:       var(--light);
+    --role-danger:     #f14445;           /* ink on it 5.0:1 */
+    --danger-text:     #ff7e76;           /* on dark 7.4:1 */
+    --role-struct:     rgb(255 255 255 / .14);
+
+    --line:        rgb(255 255 255 / .12);
+    --line-strong: rgb(255 255 255 / .38); /* input boundary ≥ 3:1 */
+
+    /* shape: continuous corners */
+    --r-s: 10px;
+    --r-m: 14px;
+    --r-l: 20px;
+    --r-xl: 26px;
+    --r-pill: 999px;
+
+    /* elevation: soft, static */
+    --elev-1: 0 1px 2px rgb(0 0 0 / .35);
+    --elev-2: 0 16px 40px -12px rgb(0 0 0 / .6), 0 2px 6px rgb(0 0 0 / .3);
+    --elev-hero: 0 30px 80px -20px rgb(0 0 0 / .7);
+    --highlight: inset 0 1px 0 rgb(255 255 255 / .14);
+
+    --ease-out: cubic-bezier(.22, 1, .36, 1);
+
+    --mask-clock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Cpath d='M12 7.5V12l3 2'/%3E%3C/svg%3E");
+    --mask-pin: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5zM12 14v6'/%3E%3C/svg%3E");
+    --mask-alert: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4 2.8 19.5h18.4z'/%3E%3Cpath d='M12 10v4.5M12 17h.01'/%3E%3C/svg%3E");
+    --mask-download: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14'/%3E%3C/svg%3E");
+}
+
+/* --------------------------------------------------------------------------
+   Icons & wordmark swap
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] .ic-pixel, [data-theme="prism"] .wordmark { display: none !important; }
+[data-theme="prism"] .ic-smooth { display: inline; }
+[data-theme="prism"] .dock-btn .slash.ic-smooth { display: none; }
+[data-theme="prism"] .dock-btn.active-off .slash.ic-smooth { display: inline; }
+[data-theme="prism"] .icon { shape-rendering: geometricPrecision; }
+[data-theme="prism"] .dock-btn .slash { stroke: none; }
+[data-theme="prism"] .dock-btn { --slash-gap: var(--light); }
+
+[data-theme="prism"] .wordmark-text {
+    display: block;
+    margin: 0 auto;
+    font: 800 2.75rem/1 var(--font-ui);
+    letter-spacing: -0.035em;
+    background: var(--spectrum);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* squircle corners where supported, plain radii elsewhere */
+@supports (corner-shape: squircle) {
+    [data-theme="prism"] :is(.setup-box, .primary-btn, .secondary-btn, .share-btn, .dock-btn, .video-tile,
+        #camMenu, #reactionMenu, #micMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .name-tag,
+        .field input, #control-dock, .cam-item, .react-item, .react-emoji-btn, .chat-bubble,
+        .chat-clip-btn, .chat-send-btn, #tile_local_camera, .theme-switch, .theme-switch button) {
+        corner-shape: squircle;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Background: the prism (static gradients — zero per-frame cost)
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] .px-bg { display: none; }
+[data-theme="prism"] .prism-bg {
+    display: block;
+    position: fixed; inset: 0;
+    z-index: var(--z-bg);
+    overflow: hidden;
+    pointer-events: none;
+    background:
+        radial-gradient(110% 80% at 50% -10%, #1d1f2c 0%, transparent 60%),
+        radial-gradient(90% 70% at 50% 110%, #15161f 0%, transparent 70%),
+        var(--bg);
+}
+/* white light entering from the left */
+.prism-beam {
+    position: absolute;
+    left: -5%; top: 50%;
+    width: 50%; height: 120px;
+    transform: translateY(-50%) rotate(-7deg);
+    transform-origin: 100% 50%;
+    background:
+        linear-gradient(90deg, transparent 0%, rgb(255 255 255 / .9) 100%) center / 100% 2px no-repeat,
+        radial-gradient(60% 40% at 100% 50%, rgb(255 255 255 / .16), transparent 70%);
+}
+/* the spectrum leaving on the right */
+.prism-fan {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 62vw; height: 90vh;
+    transform: translateY(-50%);
+    clip-path: polygon(0 47%, 100% 0, 100% 100%, 0 53%);
+    background: var(--spectrum-v);
+    -webkit-mask: linear-gradient(90deg, transparent 0%, #000 18%, rgb(0 0 0 / .8) 60%, transparent 100%);
+    mask: linear-gradient(90deg, transparent 0%, #000 18%, rgb(0 0 0 / .8) 60%, transparent 100%);
+    opacity: .32;
+    transition: opacity .7s var(--ease-out);
+}
+/* the prism lights up once the form can be submitted */
+body.gate-ready .prism-fan { opacity: .72; }
+body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
+
+@media (max-width: 640px) {
+    .prism-beam { left: 50%; top: -5%; width: 120px; height: 45%; transform: translateX(-50%); transform-origin: 50% 100%;
+        background:
+            linear-gradient(180deg, transparent 0%, rgb(255 255 255 / .9) 100%) center / 2px 100% no-repeat,
+            radial-gradient(40% 60% at 50% 100%, rgb(255 255 255 / .16), transparent 70%); }
+    .prism-fan { left: 50%; top: 50%; width: 110vw; height: 60vh; transform: translateX(-50%);
+        clip-path: polygon(47% 0, 53% 0, 100% 100%, 0 100%);
+        background: var(--spectrum);
+        -webkit-mask: linear-gradient(180deg, transparent 0%, #000 20%, rgb(0 0 0 / .7) 60%, transparent 100%);
+        mask: linear-gradient(180deg, transparent 0%, #000 20%, rgb(0 0 0 / .7) 60%, transparent 100%); }
+}
+
+/* --------------------------------------------------------------------------
+   Gate
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] .gate::before { display: none; }
+[data-theme="prism"] .setup-box {
+    width: min(100%, 380px);
+    padding: var(--s-8) var(--s-6) var(--s-6);
+    background: var(--glass-float);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid rgb(255 255 255 / .16);
+    border-radius: var(--r-xl);
+    box-shadow: var(--elev-hero), var(--highlight);
+}
+/* the card is the prism: white enters left, spectrum exits right */
+[data-theme="prism"] .setup-box::before {
+    top: 18%; bottom: 18%; left: -1px; right: auto;
+    width: 2px; height: auto;
+    background: linear-gradient(180deg, transparent, rgb(255 255 255 / .9), transparent);
+    opacity: 1;
+}
+[data-theme="prism"] .setup-box::after {
+    content: "";
+    position: absolute;
+    top: 14%; bottom: 14%; right: -1px;
+    width: 2px;
+    background: var(--spectrum-v);
+    -webkit-mask: linear-gradient(180deg, transparent, #000 20%, #000 80%, transparent);
+    mask: linear-gradient(180deg, transparent, #000 20%, #000 80%, transparent);
+}
+[data-theme="prism"] .tagline { color: var(--text-2); }
+[data-theme="prism"] .field label { color: var(--text-2); }
+[data-theme="prism"] .field-hint b { color: var(--text-1); }
+
+[data-theme="prism"] input[type="text"],
+[data-theme="prism"] input[type="password"] {
+    background: rgb(255 255 255 / .05);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-m);
+    transition: border-color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out);
+}
+[data-theme="prism"] input:hover { border-color: rgb(255 255 255 / .55); }
+[data-theme="prism"] input:focus-visible { border-color: var(--text-1); background: rgb(255 255 255 / .08); outline: 2px solid rgb(255 255 255 / .5); outline-offset: 2px; }
+[data-theme="prism"] input[aria-invalid="true"],
+[data-theme="prism"] input[aria-invalid="true"]:focus-visible { border-color: var(--danger-text); }
+[data-theme="prism"] .form-error { color: var(--danger-text); }
+[data-theme="prism"] :focus-visible { outline-color: var(--text-1); }
+
+/* Primary: the only rainbow fill in the product. Every stop carries ink at ≥10:1. */
+[data-theme="prism"] .primary-btn {
+    min-height: 52px;
+    color: var(--ink);
+    background: var(--spectrum);
+    background-size: 160% 100%;
+    background-position: 0 0;
+    border: 0;
+    border-radius: var(--r-pill);
+    box-shadow: 0 10px 30px -10px oklch(.82 .11 300 / .6);
+    transition: background-position .5s var(--ease-out), transform var(--t-fast) var(--ease-out);
+}
+[data-theme="prism"] .primary-btn:hover:not(:disabled) { background: var(--spectrum); background-size: 160% 100%; background-position: 100% 0; }
+[data-theme="prism"] .primary-btn:active:not(:disabled) { transform: scale(.98); box-shadow: 0 10px 30px -10px oklch(.82 .11 300 / .6); background: var(--spectrum); background-size: 160% 100%; }
+
+[data-theme="prism"] .secondary-btn,
+[data-theme="prism"] .share-btn {
+    color: var(--text-1);
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-pill);
+    box-shadow: none;
+}
+[data-theme="prism"] .share-btn:hover { background: var(--surface-3); }
+[data-theme="prism"] .share-btn:active { transform: scale(.97); box-shadow: none; }
+
+[data-theme="prism"] .repo-link { background: transparent; border-radius: var(--r-pill); }
+[data-theme="prism"] .repo-link:hover { color: var(--text-1); }
+
+/* --------------------------------------------------------------------------
+   Header: the room spectrum (one segment per person present)
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] #room-header {
+    background: var(--bar);
+    border-bottom: 0;
+}
+[data-theme="prism"] #room-header::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    background: var(--room-spectrum, var(--me-color));
+}
+[data-theme="prism"] .channel-label { color: var(--text-3); }
+[data-theme="prism"] .channel-id { color: var(--text-1); }
+[data-theme="prism"] .rec-chip { color: var(--danger-text); border: 1px solid var(--danger-text); border-radius: var(--r-pill); padding: 2px 10px; }
+[data-theme="prism"] .rec-chip::before { border-radius: 50%; }
+
+/* --------------------------------------------------------------------------
+   Tiles: colourless frames; colour = the person
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] .video-tile {
+    --who-color: oklch(var(--who-l) var(--who-c) calc(var(--who-h, 0) * 30deg + 15deg));
+    --role-live: var(--who-color);
+    background: #1a1c27;
+    border: 1px solid var(--line);
+    border-radius: var(--r-l);
+}
+@media (hover: hover) { [data-theme="prism"] .video-tile:hover { border-color: rgb(255 255 255 / .3); } }
+[data-theme="prism"] .video-tile::after { border-width: 3px; }
+[data-theme="prism"] .video-tile.speaking { border-color: transparent; box-shadow: none; }
+[data-theme="prism"] .grid.has-maximized .video-tile.maximized { border-color: rgb(255 255 255 / .45); box-shadow: none; }
+[data-theme="prism"] .grid.has-maximized .video-tile.maximized.speaking { border-color: transparent; box-shadow: none; }
+[data-theme="prism"] .video-tile.is-pinned::before {
+    color: var(--ink);
+    background: var(--light);
+    border-radius: var(--r-pill);
+    padding: 3px 10px;
+}
+[data-theme="prism"] .touch-shield:focus-visible { outline-color: var(--text-1); outline-offset: -8px; border-radius: var(--r-m); }
+
+[data-theme="prism"] .name-tag {
+    gap: 8px;
+    padding: 3px 10px 3px 8px;
+    color: var(--text-1);
+    background: var(--scrim);
+    border: 0;
+    border-radius: var(--r-pill);
+}
+/* identity dot, always present; becomes a 3-bar "speaking" glyph (shape, not just colour) */
+[data-theme="prism"] .name-tag::before {
+    content: ""; flex: none;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--who-color);
+}
+[data-theme="prism"] .video-tile.speaking .name-tag::before {
+    width: 14px; height: 12px;
+    border-radius: 0;
+    background: var(--who-color);
+    -webkit-mask: linear-gradient(#000, #000) 0 50% / 3px 6px no-repeat, linear-gradient(#000, #000) 50% 50% / 3px 12px no-repeat, linear-gradient(#000, #000) 100% 50% / 3px 8px no-repeat;
+    mask: linear-gradient(#000, #000) 0 50% / 3px 6px no-repeat, linear-gradient(#000, #000) 50% 50% / 3px 12px no-repeat, linear-gradient(#000, #000) 100% 50% / 3px 8px no-repeat;
+}
+
+/* avatar: identity gradient + initial (replaces the pixel face) */
+[data-theme="prism"] .avatar-placeholder {
+    width: 88px; height: 88px;
+    border: 0;
+    border-radius: 50%;
+    corner-shape: round;
+    background: linear-gradient(145deg,
+        oklch(.86 .1 calc(var(--who-h, 0) * 30deg + 5deg)),
+        oklch(.72 .13 calc(var(--who-h, 0) * 30deg + 45deg)));
+    box-shadow: 0 12px 30px -10px oklch(.7 .12 calc(var(--who-h, 0) * 30deg + 15deg) / .55);
+}
+[data-theme="prism"] .avatar-placeholder::before { display: none; }
+[data-theme="prism"] .avatar-placeholder::after {
+    content: attr(data-initial);
+    font: 700 2rem/1 var(--font-ui);
+    color: var(--ink);
+}
+[data-theme="prism"] .cyber-avatar { display: none; }
+
+/* local picture-in-picture */
+[data-theme="prism"] #tile_local_camera {
+    border: 1px solid rgb(255 255 255 / .22) !important;
+    border-radius: var(--r-l) !important;
+    box-shadow: var(--elev-2) !important;
+}
+[data-theme="prism"] #tile_local_camera.speaking { border-color: transparent !important; box-shadow: var(--elev-2) !important; }
+[data-theme="prism"] #tile_local_camera .name-tag { color: var(--text-1); }
+[data-theme="prism"] .grid.has-maximized #tile_local_camera { box-shadow: none !important; }
+@media (min-width: 769px) {
+    [data-theme="prism"] .grid.has-maximized #tile_local_camera:not(.maximized) { border-top: 1px solid rgb(255 255 255 / .22) !important; }
+}
+@media (max-width: 768px) {
+    [data-theme="prism"] .grid.has-maximized #tile_local_camera:not(.maximized) { border-left: 1px solid rgb(255 255 255 / .22) !important; }
+}
+
+[data-theme="prism"] .pip-resize-handle {
+    top: 6px; left: 6px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgb(17 18 24 / .7);
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / .75);
+    opacity: .85;
+}
+[data-theme="prism"] .gutter-handle::after { background: var(--text-1); border-radius: var(--r-pill); }
+
+/* --------------------------------------------------------------------------
+   Floating glass: menus and toast (the only blurred surfaces in a call)
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] :is(#camMenu, #reactionMenu, #micMenu) {
+    padding: var(--s-2);
+    background: var(--glass-float);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid rgb(255 255 255 / .16);
+    border-radius: var(--r-l);
+    box-shadow: var(--elev-2), var(--highlight);
+}
+[data-theme="prism"] :is(#camMenu, #reactionMenu, #micMenu)::after { display: none; }
+[data-theme="prism"] :is(.cam-item, .react-item) {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--r-s);
+}
+[data-theme="prism"] .cam-item.turn-off { color: var(--ink); background: var(--role-danger); border-color: var(--role-danger); }
+[data-theme="prism"] .react-emoji-btn { background: var(--surface-2); border: 0; border-radius: var(--r-m); }
+@media (hover: hover) {
+    [data-theme="prism"] :is(.cam-item:hover:not(:disabled), .react-item:hover, .react-emoji-btn:hover) { background: var(--surface-3); border-color: transparent; }
+    [data-theme="prism"] .cam-item.turn-off:hover { background: #ff5a57; border-color: #ff5a57; }
+}
+
+[data-theme="prism"] .toast {
+    background: var(--glass-float);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid rgb(255 255 255 / .18);
+    border-radius: var(--r-m);
+    box-shadow: var(--elev-2), var(--highlight);
+}
+[data-theme="prism"] .toast.warn  { border-color: rgb(255 255 255 / .5); }
+[data-theme="prism"] .toast.error { border-color: var(--danger-text); }
+
+[data-theme="prism"] .hand-badge {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    box-shadow: var(--elev-1);
+}
+[data-theme="prism"] .hand-badge .icon { width: 20px; height: 20px; }
+
+/* --------------------------------------------------------------------------
+   Chat: people in colour, chrome in glass
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] .chat-drawer {
+    background: rgb(24 26 37 / .96);
+    border: 1px solid rgb(255 255 255 / .12);
+    border-radius: var(--r-l);
+    box-shadow: var(--elev-2);
+}
+@media (max-width: 768px) {
+    [data-theme="prism"] .chat-drawer { border: 0; border-top: 1px solid rgb(255 255 255 / .16); border-radius: var(--r-l) var(--r-l) 0 0; }
+    [data-theme="prism"] .chat-drawer::before { background: rgb(255 255 255 / .35); border-radius: var(--r-pill); }
+}
+[data-theme="prism"] .chat-header { background: transparent; border-bottom: 1px solid var(--line); }
+[data-theme="prism"] .chat-title h2 { color: var(--text-1); }
+[data-theme="prism"] .chat-subtitle { color: var(--text-3); }
+[data-theme="prism"] :is(.chat-close-btn, .chat-clip-btn, .chat-send-btn) { border-radius: var(--r-pill); }
+[data-theme="prism"] .chat-clip-btn { color: var(--text-1); background: var(--surface-2); border: 1px solid var(--line); }
+[data-theme="prism"] .chat-send-btn { color: var(--ink); background: var(--light); border-color: var(--light); }
+[data-theme="prism"] .chat-send-btn:hover { background: #fff; }
+[data-theme="prism"] .chat-input-bar { background: transparent; border-top: 1px solid var(--line); }
+[data-theme="prism"] .chat-input-bar input[type="text"] { border-radius: var(--r-pill); padding-inline: 16px; }
+
+/* conversation shape: yours on the right, others on the left */
+[data-theme="prism"] .chat-stream { gap: var(--s-2); }
+[data-theme="prism"] :is(.chat-bubble, .file-card) {
+    --who-color: oklch(var(--who-l) var(--who-c) calc(var(--who-h, 0) * 30deg + 15deg));
+    align-self: flex-start;
+    width: auto;
+    max-width: 88%;
+    min-width: 45%;
+    padding: 8px 12px 10px;
+    background: rgb(255 255 255 / .06);
+    border: 0;
+    border-radius: 16px 16px 16px 6px;
+}
+[data-theme="prism"] .chat-bubble.self {
+    align-self: flex-end;
+    background: color-mix(in oklch, var(--who-color) 18%, #1c1e2a);
+    border-radius: 16px 16px 6px 16px;
+}
+[data-theme="prism"] .sender-name { color: var(--who-color); }
+[data-theme="prism"] .chat-bubble.self .sender-name { color: var(--text-2); }
+[data-theme="prism"] .chat-bubble.pinned { box-shadow: inset 0 0 0 1px rgb(255 255 255 / .35); background: rgb(255 255 255 / .09); }
+[data-theme="prism"] .chat-link { color: var(--text-1); }
+[data-theme="prism"] .chat-bubble.self .chat-link { color: var(--text-1); }
+
+[data-theme="prism"] .ttl-pill { color: var(--text-3); background: transparent; border: 0; padding: 0; }
+[data-theme="prism"] .ttl-pill.urgent { color: var(--danger-text); background: transparent; }
+
+[data-theme="prism"] .chat-system-note {
+    align-self: center;
+    width: auto;
+    max-width: 92%;
+    color: var(--text-2);
+    background: transparent;
+    border: 1px dashed rgb(255 255 255 / .22);
+    border-radius: var(--r-pill);
+    padding: 4px 14px;
+}
+[data-theme="prism"] .chat-system-note::before { background: var(--text-2); }
+
+[data-theme="prism"] .file-name { font-weight: 600; }
+[data-theme="prism"] .file-dl-btn { color: var(--ink); background: var(--light); border-radius: var(--r-pill); box-shadow: none; }
+[data-theme="prism"] .file-dl-btn:hover { background: #fff; }
+[data-theme="prism"] :is(.chat-img-wrap, .file-img-wrap) { border: 0; border-radius: var(--r-s); }
+
+/* progress is light filling up: one of the two sanctioned rainbow uses in a call */
+[data-theme="prism"] .upload-progress-fill { background: var(--spectrum); }
+[data-theme="prism"] .chat-badge { background: var(--light); border-radius: 50%; box-shadow: 0 0 0 2px #1d1f2b; }
+
+/* --------------------------------------------------------------------------
+   Dock: a floating glass bar; states by inversion, identity and red
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] #control-dock {
+    width: auto;
+    align-self: center;
+    margin: 0 auto calc(var(--s-3) + env(safe-area-inset-bottom));
+    padding: var(--s-2);
+    gap: var(--s-2);
+    background: rgb(26 28 40 / .9);
+    border: 1px solid rgb(255 255 255 / .12);
+    border-radius: var(--r-xl);
+    box-shadow: var(--elev-2), var(--highlight);
+}
+[data-theme="prism"] .dock-btn {
+    min-width: 72px; height: 60px;
+    color: var(--text-1);
+    background: var(--surface-2);
+    border: 1px solid transparent;
+    border-radius: var(--r-l);
+    box-shadow: none;
+    font-weight: 500;
+    transition: background-color var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out);
+}
+[data-theme="prism"] .dock-btn:active { transform: scale(.96); box-shadow: none; }
+@media (hover: hover) { [data-theme="prism"] .dock-btn:hover { background: var(--surface-3); } }
+
+/* your device is off → inverted light */
+[data-theme="prism"] .dock-btn.active-off { color: var(--ink); background: var(--light); border-color: var(--light); }
+@media (hover: hover) { [data-theme="prism"] .dock-btn.active-off:hover { background: #fff; } }
+/* a feature is broadcasting you → your own colour */
+[data-theme="prism"] .dock-btn.active-on {
+    color: var(--text-1);
+    background: color-mix(in oklch, var(--me-color) 26%, transparent);
+    border-color: var(--me-color);
+}
+@media (hover: hover) { [data-theme="prism"] .dock-btn.active-on:hover { background: color-mix(in oklch, var(--me-color) 36%, transparent); } }
+/* recording */
+[data-theme="prism"] .dock-btn.is-recording { color: var(--danger-text); background: rgb(241 68 69 / .12); border-color: var(--danger-text); }
+/* leave */
+[data-theme="prism"] .dock-btn.leave { margin-left: var(--s-3); color: var(--ink); background: var(--role-danger); border-color: var(--role-danger); }
+@media (hover: hover) { [data-theme="prism"] .dock-btn.leave:hover { background: #ff5a57; border-color: #ff5a57; } }
+
+@media (max-width: 768px) {
+    [data-theme="prism"] #control-dock { width: calc(100% - 16px); margin-bottom: calc(8px + env(safe-area-inset-bottom)); padding: 6px; gap: 4px; justify-content: space-between; }
+    [data-theme="prism"] .dock-btn { min-width: 44px; width: auto; flex: 1 1 0; height: 46px; border-radius: var(--r-m); }
+    [data-theme="prism"] .dock-btn.leave { margin-left: 4px; }
+}
+@media (max-height: 500px) {
+    [data-theme="prism"] #control-dock { margin-bottom: 6px; }
+}
+[data-theme="prism"] body.pseudo-fullscreen #control-dock {
+    position: absolute !important;
+    left: 50% !important; bottom: 12px !important;
+    width: auto !important;
+    transform: translateX(-50%);
+    background: rgb(26 28 40 / .9) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Theme switch (both themes)
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] .theme-switch { border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: rgb(17 18 24 / .6); }
+[data-theme="prism"] .theme-switch button { border-radius: var(--r-pill); color: var(--text-2); }
+[data-theme="prism"] .theme-switch button[aria-checked="true"] { color: var(--ink); background: var(--light); }
+
+@media (prefers-reduced-transparency: reduce) {
+    [data-theme="prism"] :is(.setup-box, #camMenu, #reactionMenu, #micMenu, .toast) {
+        -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface-1);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .prism-fan { transition: none; }
+}

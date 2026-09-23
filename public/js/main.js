@@ -1,5 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
-import { showToast, setDockLabel } from './ui.js';
+import { showToast, setDockLabel, initThemeSwitch } from './ui.js';
 import { copyShareLink, toggleFullscreen, recalculateLayout, updateSpeakerHighlight, applyDynamicMirrorEffect } from './ui.js';
 import { 
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
@@ -345,6 +345,15 @@ function updateRoomHint() {
 window.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('gateForm');
     form?.addEventListener('submit', (e) => { e.preventDefault(); initiateCall(); });
+    initThemeSwitch();
+    // The Prism join screen "lights up" once the form can be submitted.
+    const updateReady = () => {
+        const ready = !!sanitizeRoom(document.getElementById('roomInput')?.value || '') &&
+                      !!(document.getElementById('nameInput')?.value || '').trim();
+        document.body.classList.toggle('gate-ready', ready);
+    };
+    ['roomInput', 'nameInput'].forEach(id => document.getElementById(id)?.addEventListener('input', updateReady));
+    updateReady();
     document.getElementById('roomInput')?.addEventListener('input', updateRoomHint);
     updateRoomHint();
 });

@@ -1,6 +1,6 @@
 import { AppState } from './state.js';
 import { sendDataPacket } from './livekit-handler.js';
-import { playSynthSound, recalculateLayout, showToast } from './ui.js';
+import { playSynthSound, recalculateLayout, showToast, hueIndexFor } from './ui.js';
 
 let isChatOpen = false;
 let unreadCount = 0;
@@ -234,6 +234,7 @@ export function renderMessage(msg, isSelfSent) {
     el.dataset.created = msg.created_at;
     // Pinned messages (e.g. recording notices) never expire
     el.dataset.type = msg.pinned ? 'pinned' : 'chat';
+    el.style.setProperty('--who-h', String(hueIndexFor(msg.sender)));
     if (msg.pinned) el.classList.add('pinned');
 
     el.innerHTML = `
@@ -268,6 +269,7 @@ export function renderFile(file, isSelfSent) {
     el.className = 'file-card';
     el.dataset.created = file.created_at;
     el.dataset.type = 'file';
+    el.style.setProperty('--who-h', String(hueIndexFor(file.sender)));
 
     const imagePreviewHtml = isImage 
         ? `<div class="file-img-wrap"><img src="/api/files/${file.id}" alt="${escapeHtml(file.original_name)}" class="file-img-preview" loading="lazy" onload="window.scrollChatBottom && window.scrollChatBottom()" /></div>` 

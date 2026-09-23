@@ -4,6 +4,8 @@ This document defines how meet. looks, behaves and reads. It is written against 
 
 All values live as tokens at the top of `public/styles.css`. If a value you need is not a token, add the token first.
 
+**Themes.** Pixel, described here, is the default. A second theme, Prism, uses the same foundation with glass and an identity spectrum. It is specified in `design-prism.md` and can be chosen on the join screen or with `/?theme=prism`.
+
 ---
 
 ## 1. Rules in one screen
