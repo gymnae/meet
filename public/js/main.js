@@ -10,8 +10,9 @@ import {
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
 import {
     normalizeOutgoingMicTrack,
-    attachNormalizedRemoteAudio, detachNormalizedRemoteAudio
+    attachNormalizedRemoteAudio, detachNormalizedRemoteAudio, getMicConstraints
 } from './audio-normalizer.js';
+import { toggleSoundMenu, refreshSoundMenu } from './sound-menu.js';
 import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
 import { initCapabilityChecks, refreshControlVisibility } from './capabilities.js';
@@ -28,6 +29,7 @@ window.copyShareLink = copyShareLink;
 window.handleChatSubmit = handleChatSubmit;
 window.handleFileUpload = handleFileUpload;
 window.toggleRecording = toggleRecording;
+window.toggleSoundMenu = toggleSoundMenu;
 
 window.addEventListener('DOMContentLoaded', () => {
     initChatEngine();
@@ -138,11 +140,7 @@ async function initiateCall() {
 
         joinBtn.innerText = "Opening camera…";
 
-        const audioConstraints = {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-        };
+        const audioConstraints = getMicConstraints();
 
         const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
         AppState.localPreferredCodec = isFirefox ? 'vp8' : 'h264';
@@ -234,7 +232,7 @@ async function initiateCall() {
             } else if (track.kind === LivekitClient.Track.Kind.Audio) {
                 if (publication.source === LivekitClient.Track.Source.Microphone || publication.source === 'unknown') {
                     // Normalize remote microphone audio for consistent loudness
-                    const element = attachNormalizedRemoteAudio(track);
+                    const element = attachNormalizedRemoteAudio(track, participant.identity);
                     document.body.appendChild(element);
                 } else {
                     // Screen share / other audio stays untouched
@@ -273,10 +271,12 @@ async function initiateCall() {
             ensureParticipantTile(participant, 'camera');
             checkMassMuteRules();
             broadcastCodecPreference();
+            refreshSoundMenu();
         });
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
             cleanupAllTilesForParticipant(participant.identity);
+            refreshSoundMenu();
             AppState.participantPreferences.delete(participant.identity);
             evaluateAndNegotiateCodec();
         });
@@ -392,7 +392,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // === MENUS & DRAWER: Escape and outside click close them ===
-const MENU_IDS = ['camMenu', 'micMenu', 'reactionMenu'];
+const MENU_IDS = ['camMenu', 'micMenu', 'reactionMenu', 'soundMenu'];
 function closeMenus() { MENU_IDS.forEach(id => { const m = document.getElementById(id); if (m) m.style.display = 'none'; }); }
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
@@ -401,6 +401,6 @@ document.addEventListener('keydown', (e) => {
     if (document.body.classList.contains('chat-open')) toggleChat();
 });
 document.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#camMenu, #micMenu, #reactionMenu, #btnMic, #btnCam, #btnReact')) return;
+    if (e.target.closest('#camMenu, #micMenu, #reactionMenu, #soundMenu, #btnMic, #btnCam, #btnReact, #btnSound')) return;
     closeMenus();
 });

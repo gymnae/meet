@@ -101,7 +101,7 @@
 /* squircle corners where supported, plain radii elsewhere */
 @supports (corner-shape: squircle) {
     [data-theme="prism"] :is(.setup-box, .primary-btn, .secondary-btn, .share-btn, .dock-btn, .video-tile,
-        #camMenu, #reactionMenu, #micMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .name-tag,
+        #camMenu, #reactionMenu, #micMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .name-tag,
         .field input, #control-dock, .cam-item, .react-item, .react-emoji-btn, .chat-bubble,
         .chat-clip-btn, .chat-send-btn, #tile_local_camera, .theme-switch, .theme-switch button) {
         corner-shape: squircle;
@@ -351,7 +351,7 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 /* --------------------------------------------------------------------------
    Floating glass: menus and toast (the only blurred surfaces in a call)
    -------------------------------------------------------------------------- */
-[data-theme="prism"] :is(#camMenu, #reactionMenu, #micMenu) {
+[data-theme="prism"] :is(#camMenu, #reactionMenu, #micMenu, #soundMenu) {
     padding: var(--s-2);
     background: var(--glass-float);
     -webkit-backdrop-filter: var(--glass-blur);
@@ -360,7 +360,7 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
     border-radius: var(--r-l);
     box-shadow: var(--elev-2), var(--highlight);
 }
-[data-theme="prism"] :is(#camMenu, #reactionMenu, #micMenu)::after { display: none; }
+[data-theme="prism"] :is(#camMenu, #reactionMenu, #micMenu, #soundMenu)::after { display: none; }
 [data-theme="prism"] :is(.cam-item, .react-item) {
     background: transparent;
     border: 1px solid transparent;
@@ -368,6 +368,12 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 }
 [data-theme="prism"] .cam-item.turn-off { color: var(--ink); background: var(--role-danger); border-color: var(--role-danger); }
 [data-theme="prism"] .react-emoji-btn { background: var(--surface-2); border: 0; border-radius: var(--r-m); }
+[data-theme="prism"] #soundMenu { padding: var(--s-3); }
+[data-theme="prism"] .sound-heading { text-transform: none; letter-spacing: 0; }
+[data-theme="prism"] .sound-seg { padding: 2px; gap: 2px; background: var(--surface-2); border: 0; border-radius: var(--r-s); }
+[data-theme="prism"] .sound-seg button { background: transparent; border: 0; border-radius: 8px; }
+[data-theme="prism"] .sound-seg button[aria-checked="true"] { color: var(--ink); background: var(--light); }
+[data-theme="prism"] .sound-reset { border-color: var(--line); }
 @media (hover: hover) {
     [data-theme="prism"] :is(.cam-item:hover:not(:disabled), .react-item:hover, .react-emoji-btn:hover) { background: var(--surface-3); border-color: transparent; }
     [data-theme="prism"] .cam-item.turn-off:hover { background: #ff5a57; border-color: #ff5a57; }
@@ -529,7 +535,7 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 [data-theme="prism"] .theme-switch button[aria-checked="true"] { color: var(--ink); background: var(--light); }
 
 @media (prefers-reduced-transparency: reduce) {
-    [data-theme="prism"] :is(.setup-box, #camMenu, #reactionMenu, #micMenu, .toast) {
+    [data-theme="prism"] :is(.setup-box, #camMenu, #reactionMenu, #micMenu, #soundMenu, .toast) {
         -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface-1);
     }
 }
