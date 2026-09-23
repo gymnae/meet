@@ -182,8 +182,8 @@ video { width: 100%; height: 100%; object-fit: cover; background: #000; pointer-
     z-index: 2500;
     flex-direction: column;
     overflow: hidden;
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    /* No backdrop-filter: the drawer overlaps live video, so a blur would be recomputed every
+       video frame for a barely visible effect at 96% opacity. */
 }
 
 /* Mobile Bottom Sheet (videos stay visible above; keyboard tracking handled in JS) */

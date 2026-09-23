@@ -17,10 +17,12 @@ export function getResolutionProfile(deviceLabel = '') {
     }
 
     // Desktops, rear lenses, and external USB webcams (Logitech Brio, Elgato Cam Link, etc.)
+    // Capped at 720p30: simulcast software-encodes up to three layers from this source, and a
+    // 1440p source costs roughly 4x the CPU of 720p while tiles rarely display that many pixels.
     return {
-        width: { ideal: 2560 },
-        height: { ideal: 1440 },
-        frameRate: { ideal: 30 }
+        width: { ideal: 1280, max: 1280 },
+        height: { ideal: 720, max: 720 },
+        frameRate: { ideal: 30, max: 30 }
     };
 }
 

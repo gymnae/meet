@@ -1,19 +1,30 @@
 import { AppState } from './state.js';
 
 // === WEB AUDIO API SYNTH SOUND GENERATOR ===
+// One shared context: every AudioContext owns a real-time audio thread, so creating one
+// per sound (and never closing it) piles up CPU load over the course of a call.
+let sharedAudioCtx = null;
+function getAudioContext() {
+    if (sharedAudioCtx && sharedAudioCtx.state !== 'closed') return sharedAudioCtx;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    sharedAudioCtx = new AudioCtx();
+    return sharedAudioCtx;
+}
+
 export function playSynthSound(type) {
     try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
+        const ctx = getAudioContext();
+        if (!ctx) return;
         if (ctx.state === 'suspended') {
-            ctx.resume();
+            ctx.resume().catch(() => {});
         }
 
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
+        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
 
         const now = ctx.currentTime;
 
@@ -84,31 +95,37 @@ export function applyDynamicMirrorEffect(videoTrackInstance) {
     }
 }
 
+// Write a style value only when it changes, so re-running the layout is free when nothing moved.
+// Values must be given in the browser's normalized form (e.g. "0px", not "0") for the check to hit.
+function setStyle(el, prop, value) {
+    if (el.style[prop] !== value) el.style[prop] = value;
+}
+
+function getMaximizeTargetId() {
+    if (AppState.pinnedTileId && document.getElementById(AppState.pinnedTileId)) return AppState.pinnedTileId;
+    if (AppState.activeScreenShareTileId && document.getElementById(AppState.activeScreenShareTileId)) return AppState.activeScreenShareTileId;
+    return null;
+}
+
 export function recalculateLayout() {
     const grid = document.getElementById('videoGrid');
     if (!grid) return;
 
-    const rawTiles = Array.from(grid.querySelectorAll('.video-tile')); 
-    let targetMaximizeId = null;
-
-    if (AppState.pinnedTileId && document.getElementById(AppState.pinnedTileId)) {
-        targetMaximizeId = AppState.pinnedTileId;
-    } else if (AppState.activeScreenShareTileId && document.getElementById(AppState.activeScreenShareTileId)) {
-        targetMaximizeId = AppState.activeScreenShareTileId;
-    }
+    const rawTiles = Array.from(grid.querySelectorAll('.video-tile'));
+    const targetMaximizeId = getMaximizeTargetId();
 
     const isMobile = window.innerWidth <= 768;
     const sidebarW = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w').trim() || '200px';
+    // Read geometry before any writes to avoid a forced synchronous layout.
+    const aspect = grid.clientWidth / grid.clientHeight;
 
-    // Reset base border colors and glow
     rawTiles.forEach(tile => {
-        tile.classList.remove('maximized');
-        tile.style.borderColor = '#7b2cbf';
-        tile.style.boxShadow = '0 4px 10px rgba(123, 44, 191, 0.3)';
+        const isMax = tile.id === targetMaximizeId;
+        if (tile.classList.contains('maximized') !== isMax) tile.classList.toggle('maximized', isMax);
     });
 
     if (targetMaximizeId) {
-        grid.classList.add('has-maximized');
+        if (!grid.classList.contains('has-maximized')) grid.classList.add('has-maximized');
         
         const gridTiles = rawTiles.sort((a, b) => {
             if (a.id === targetMaximizeId) return -1;
@@ -121,49 +138,45 @@ export function recalculateLayout() {
         const sidebarCount = Math.max(1, gridTiles.length - 1);
         
         if (!isMobile) {
-            grid.style.gridTemplateColumns = `minmax(0, 1fr) ${sidebarW}`;
-            grid.style.gridTemplateRows = `repeat(${sidebarCount}, minmax(0, 1fr))`;
+            setStyle(grid, 'gridTemplateColumns', `minmax(0px, 1fr) ${sidebarW}`);
+            setStyle(grid, 'gridTemplateRows', `repeat(${sidebarCount}, minmax(0px, 1fr))`);
         } else {
-            grid.style.gridTemplateColumns = `repeat(${sidebarCount}, minmax(0, 1fr))`;
-            grid.style.gridTemplateRows = 'minmax(0, 1fr) 100px';
+            setStyle(grid, 'gridTemplateColumns', `repeat(${sidebarCount}, minmax(0px, 1fr))`);
+            setStyle(grid, 'gridTemplateRows', 'minmax(0px, 1fr) 100px');
         }
-        
-        let sidebarIndex = 1; 
+
+        let sidebarIndex = 1;
 
         gridTiles.forEach(tile => {
             if (tile.id === targetMaximizeId) {
-                tile.classList.add('maximized');
-                tile.style.borderColor = '#00f0ff';
-                tile.style.boxShadow = '0 0 25px rgba(0, 240, 255, 0.6)';
                 if (!isMobile) {
-                    tile.style.gridColumn = '1';
-                    tile.style.gridRow = `1 / span ${sidebarCount}`;
+                    setStyle(tile, 'gridColumn', '1');
+                    setStyle(tile, 'gridRow', `1 / span ${sidebarCount}`);
                 } else {
-                    tile.style.gridColumn = `1 / span ${sidebarCount}`;
-                    tile.style.gridRow = '1';
+                    setStyle(tile, 'gridColumn', `1 / span ${sidebarCount}`);
+                    setStyle(tile, 'gridRow', '1');
                 }
             } else {
                 if (!isMobile) {
-                    tile.style.gridColumn = '2';
-                    tile.style.gridRow = `${sidebarIndex}`;
+                    setStyle(tile, 'gridColumn', '2');
+                    setStyle(tile, 'gridRow', `${sidebarIndex}`);
                 } else {
-                    tile.style.gridColumn = `${sidebarIndex}`;
-                    tile.style.gridRow = '2';
+                    setStyle(tile, 'gridColumn', `${sidebarIndex}`);
+                    setStyle(tile, 'gridRow', '2');
                 }
                 sidebarIndex++;
             }
         });
 
     } else {
-        grid.classList.remove('has-maximized');
-        
+        if (grid.classList.contains('has-maximized')) grid.classList.remove('has-maximized');
+
         const gridTiles = rawTiles.filter(t => t.id !== 'tile_local_camera');
         const totalTiles = Math.max(1, gridTiles.length);
-        
+
         let cols = Math.ceil(Math.sqrt(totalTiles));
         let rows = Math.ceil(totalTiles / cols);
-        
-        const aspect = grid.clientWidth / grid.clientHeight;
+
         if (aspect > 1.5 && totalTiles > 2) {
             cols = Math.ceil(Math.sqrt(totalTiles * aspect));
             rows = Math.ceil(totalTiles / cols);
@@ -172,50 +185,67 @@ export function recalculateLayout() {
             cols = Math.ceil(totalTiles / rows);
         }
 
-        grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-        grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
-        
-        gridTiles.forEach(tile => {
-            tile.style.gridColumn = 'auto'; 
-            tile.style.gridRow = 'auto';
+        setStyle(grid, 'gridTemplateColumns', `repeat(${cols}, minmax(0px, 1fr))`);
+        setStyle(grid, 'gridTemplateRows', `repeat(${rows}, minmax(0px, 1fr))`);
+
+        // Includes the local camera tile.
+        rawTiles.forEach(tile => {
+            setStyle(tile, 'gridColumn', 'auto');
+            setStyle(tile, 'gridRow', 'auto');
         });
-        
-        const localCam = document.getElementById('tile_local_camera');
-        if (localCam) {
-            localCam.style.gridColumn = 'auto';
-            localCam.style.gridRow = 'auto';
-        }
     }
 
-    const localCameraTile = document.getElementById('tile_local_camera');
-    if (localCameraTile && !localCameraTile.classList.contains('maximized')) {
-        localCameraTile.style.borderColor = '#ff007f';
-    }
-
-    // === ACTIVE SPEAKER HIGHLIGHT ENGINE (INCLUDING MAXIMIZED TILES) ===
-    if (AppState.activeSpeakerIdentity) {
-        const isLocalSpeaker = AppState.activeRoom && AppState.activeSpeakerIdentity === AppState.activeRoom.localParticipant?.identity;
-        const speakerTileId = isLocalSpeaker ? 'tile_local_camera' : `tile_${AppState.activeSpeakerIdentity}_camera`;
-        const speakerScreenTileId = isLocalSpeaker ? 'tile_local_screen_share' : `tile_${AppState.activeSpeakerIdentity}_screen_share`;
-
-        const speakerTile = document.getElementById(speakerTileId);
-        if (speakerTile) {
-            speakerTile.style.borderColor = '#39ff14';
-            speakerTile.style.boxShadow = '0 0 15px rgba(57, 255, 20, 0.7)';
-        }
-
-        // If the maximized view belongs to the speaker (camera or their presentation), light it up green
-        if (targetMaximizeId && (targetMaximizeId === speakerTileId || targetMaximizeId === speakerScreenTileId)) {
-            const maxTile = document.getElementById(targetMaximizeId);
-            if (maxTile) {
-                maxTile.style.borderColor = '#39ff14';
-                maxTile.style.boxShadow = '0 0 35px rgba(57, 255, 20, 0.9)';
-            }
-        }
-    }
+    updateSpeakerHighlight(rawTiles, targetMaximizeId);
 
     // Keep resize handles/gutter in sync (dynamic import avoids circular deps)
     import('./resize.js').then(m => m.syncResizeAfterLayout()).catch(() => {});
+}
+
+// === ACTIVE SPEAKER HIGHLIGHT ENGINE (INCLUDING MAXIMIZED TILES) ===
+// Border/glow only. Speaker changes arrive several times a second, so they call this directly
+// instead of re-running the grid layout, and each tile is only restyled when its look changes.
+export function updateSpeakerHighlight(tiles, targetMaximizeId) {
+    if (!tiles) {
+        const grid = document.getElementById('videoGrid');
+        if (!grid) return;
+        tiles = grid.querySelectorAll('.video-tile');
+        targetMaximizeId = getMaximizeTargetId();
+    }
+
+    let speakerTileId = null;
+    let speakerScreenTileId = null;
+    if (AppState.activeSpeakerIdentity) {
+        const isLocalSpeaker = AppState.activeRoom && AppState.activeSpeakerIdentity === AppState.activeRoom.localParticipant?.identity;
+        speakerTileId = isLocalSpeaker ? 'tile_local_camera' : `tile_${AppState.activeSpeakerIdentity}_camera`;
+        speakerScreenTileId = isLocalSpeaker ? 'tile_local_screen_share' : `tile_${AppState.activeSpeakerIdentity}_screen_share`;
+    }
+    const maximizedIsSpeaker = !!targetMaximizeId && (targetMaximizeId === speakerTileId || targetMaximizeId === speakerScreenTileId);
+
+    tiles.forEach(tile => {
+        // Base violet, then maximized cyan, local PiP magenta, speaker green, speaker's maximized view brighter green.
+        let border = '#7b2cbf';
+        let shadow = '0 4px 10px rgba(123, 44, 191, 0.3)';
+        if (tile.id === targetMaximizeId) {
+            border = '#00f0ff';
+            shadow = '0 0 25px rgba(0, 240, 255, 0.6)';
+        } else if (tile.id === 'tile_local_camera') {
+            border = '#ff007f';
+        }
+        if (tile.id === speakerTileId) {
+            border = '#39ff14';
+            shadow = '0 0 15px rgba(57, 255, 20, 0.7)';
+        }
+        if (maximizedIsSpeaker && tile.id === targetMaximizeId) {
+            border = '#39ff14';
+            shadow = '0 0 35px rgba(57, 255, 20, 0.9)';
+        }
+
+        const look = border + '|' + shadow;
+        if (tile.dataset.look === look) return;
+        tile.dataset.look = look;
+        tile.style.borderColor = border;
+        tile.style.boxShadow = shadow;
+    });
 }
 
 export function triggerFloatingEmoji(tileId, emoji) {

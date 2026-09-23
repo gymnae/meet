@@ -1,5 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
-import { copyShareLink, toggleFullscreen, recalculateLayout, applyDynamicMirrorEffect } from './ui.js';
+import { copyShareLink, toggleFullscreen, recalculateLayout, updateSpeakerHighlight, applyDynamicMirrorEffect } from './ui.js';
 import { 
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
     toggleScreenShare, cleanupTileTrack, cleanupAllTilesForParticipant, 
@@ -253,8 +253,10 @@ async function initiateCall() {
         });
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
-            AppState.activeSpeakerIdentity = speakers.length > 0 ? speakers[0].identity : null;
-            recalculateLayout();
+            const nextSpeaker = speakers.length > 0 ? speakers[0].identity : null;
+            if (nextSpeaker === AppState.activeSpeakerIdentity) return;
+            AppState.activeSpeakerIdentity = nextSpeaker;
+            updateSpeakerHighlight();
         });
 
         await AppState.activeRoom.connect(connectionInfo.serverUrl, connectionInfo.token);
@@ -302,4 +304,9 @@ const wakeAllVideos = () => {
 };
 window.addEventListener('touchstart', wakeAllVideos, { passive: true });
 window.addEventListener('click', wakeAllVideos, { passive: true });
-window.addEventListener('resize', recalculateLayout);
+// Resize fires many times per frame while dragging; lay out at most once per frame.
+let layoutFrame = 0;
+window.addEventListener('resize', () => {
+    if (layoutFrame) return;
+    layoutFrame = requestAnimationFrame(() => { layoutFrame = 0; recalculateLayout(); });
+});
