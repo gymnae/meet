@@ -117,9 +117,16 @@ async function startRecording() {
         // Firefox); rAF drives the painting so frames keep flowing.
         const canvasStream = canvas.captureStream(REC_FPS);
 
-        const loop = () => {
+        // rAF runs at the display rate (up to 120-144 Hz); paint only as often as the stream
+        // captures, since extra frames are dropped anyway.
+        const frameInterval = 1000 / REC_FPS;
+        let lastDraw = 0;
+        const loop = (ts) => {
             if (!drawTimer) return;
-            drawFrame();
+            if (ts - lastDraw >= frameInterval - 1) {
+                lastDraw = ts;
+                drawFrame();
+            }
             drawTimer = requestAnimationFrame(loop);
         };
         drawTimer = requestAnimationFrame(loop);

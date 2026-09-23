@@ -54,7 +54,8 @@ export function attachParticipantVideoTrack(track, participant, streamSource) {
     const tile = ensureParticipantTile(participant, streamSource);
     if (streamSource === 'screen_share') AppState.activeScreenShareTileId = tile.id;
 
-    tile.querySelectorAll('video').forEach(v => v.remove());
+    // Release the old element's stream so it doesn't keep decoding off-DOM.
+    tile.querySelectorAll('video').forEach(v => { v.srcObject = null; v.remove(); });
     const nativeVideoTag = track.attach();
     
     nativeVideoTag.muted = true;

@@ -12,13 +12,22 @@ export function initChatEngine() {
     }
 
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => {
-            syncDrawerToViewport();
-            scrollChatToBottom();
-        });
-        window.visualViewport.addEventListener('scroll', () => {
-            syncDrawerToViewport();
-        });
+        // visualViewport fires many events per frame while scrolling/resizing; coalesce to one per frame.
+        let viewportFrame = 0;
+        let viewportResized = false;
+        const onViewportChange = (e) => {
+            if (e.type === 'resize') viewportResized = true;
+            if (viewportFrame) return;
+            viewportFrame = requestAnimationFrame(() => {
+                viewportFrame = 0;
+                if (!isChatOpen) { viewportResized = false; return; }
+                syncDrawerToViewport();
+                if (viewportResized) scrollChatToBottom();
+                viewportResized = false;
+            });
+        };
+        window.visualViewport.addEventListener('resize', onViewportChange);
+        window.visualViewport.addEventListener('scroll', onViewportChange);
     }
 
     const input = document.getElementById('chatInput');
@@ -81,6 +90,7 @@ export function toggleChat() {
         if (badge) badge.style.display = 'none';
 
         syncDrawerToViewport();
+        tickCountdowns();
 
         const isTouch = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 768;
         const input = document.getElementById('chatInput');
@@ -290,29 +300,35 @@ function tickCountdowns() {
 
     const items = stream.querySelectorAll('[data-created]');
     items.forEach(el => {
-        const created = parseInt(el.dataset.created, 10);
         const type = el.dataset.type;
-        const pill = el.querySelector('.ttl-pill');
+        if (type !== 'chat' && type !== 'file') return; // pinned messages never expire
 
-        if (type === 'chat') {
-            const remaining = Math.max(0, Math.ceil((created + 60 * 1000 - now) / 1000));
-            if (remaining <= 0) {
-                el.style.opacity = '0';
-                setTimeout(() => el.remove(), 400);
-            } else if (pill) {
-                pill.innerText = `⏳ ${remaining}s`;
-            }
-        } else if (type === 'file') {
-            const remaining = Math.max(0, Math.ceil((created + 600 * 1000 - now) / 1000));
-            if (remaining <= 0) {
-                el.style.opacity = '0';
-                setTimeout(() => el.remove(), 400);
-            } else if (pill) {
-                const mins = Math.floor(remaining / 60);
-                const secs = remaining % 60;
-                pill.innerText = `⏳ ${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
-            }
+        const created = parseInt(el.dataset.created, 10);
+        const ttlMs = type === 'chat' ? 60 * 1000 : 600 * 1000;
+        const remaining = Math.max(0, Math.ceil((created + ttlMs - now) / 1000));
+
+        if (remaining <= 0) {
+            // Drop the marker so the fade-out is scheduled exactly once.
+            delete el.dataset.created;
+            el.style.opacity = '0';
+            setTimeout(() => el.remove(), 400);
+            return;
         }
+
+        // Pills are invisible while the drawer is closed; toggleChat refreshes them on open.
+        if (!isChatOpen) return;
+        const pill = el.querySelector('.ttl-pill');
+        if (!pill) return;
+
+        let label;
+        if (type === 'chat') {
+            label = `⏳ ${remaining}s`;
+        } else {
+            const mins = Math.floor(remaining / 60);
+            const secs = remaining % 60;
+            label = `⏳ ${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+        }
+        if (pill.textContent !== label) pill.textContent = label;
     });
 }
 
@@ -334,6 +350,8 @@ export function renderSystemNote(text) {
 }
 
 export function scrollChatToBottom() {
+    // A closed drawer has nothing to scroll (toggleChat scrolls on open); skip the forced layout.
+    if (!isChatOpen) return;
     const stream = document.getElementById('chatStream');
     if (stream) {
         stream.scrollTop = stream.scrollHeight;
