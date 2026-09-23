@@ -1,5 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
-import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel } from './ui.js';
+import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
 
 export function ensureParticipantTile(participant, streamSource = 'camera') {
@@ -34,11 +34,16 @@ export function ensureParticipantTile(participant, streamSource = 'camera') {
 
         tile.innerHTML = `
             <div class="touch-shield" role="button" tabindex="0" aria-pressed="false" aria-label="Pin ${escapeAttr(isScreenShare ? rawCleanName + ' screen' : rawCleanName)}"></div>
-            <div class="hand-badge" role="img" aria-label="Hand raised"><svg class="icon" aria-hidden="true"><use href="#i-hand"/></svg></div>
-            <div class="avatar-placeholder av${variant}"><div class="cyber-avatar"><div class="ca-ear l"></div><div class="ca-ear r"></div><div class="ca-head"></div><div class="ca-hair"></div><div class="ca-visor"></div><div class="ca-body"></div></div></div>
+            <div class="hand-badge" role="img" aria-label="Hand raised"><svg class="icon" aria-hidden="true"><use class="ic-pixel" href="#i-hand"/><use class="ic-smooth" href="#s-hand"/></svg></div>
+            <div class="avatar-placeholder av${variant}" data-initial="${escapeAttr(rawCleanName.charAt(0).toUpperCase())}"><div class="cyber-avatar"><div class="ca-ear l"></div><div class="ca-ear r"></div><div class="ca-head"></div><div class="ca-hair"></div><div class="ca-visor"></div><div class="ca-body"></div></div></div>
             <div class="name-tag">${isScreenShare ? `${rawCleanName} (Screen)` : rawCleanName}</div>
         `;
         
+        // identity hue (Prism theme): same name → same colour everywhere
+        const hue = hueIndexFor(rawCleanName);
+        tile.style.setProperty('--who-h', String(hue));
+        if (isLocalUser) document.documentElement.style.setProperty('--me-h', String(hue));
+
         const shield = tile.querySelector('.touch-shield');
         const togglePin = () => {
             if (targetTileId === 'tile_local_camera') return;

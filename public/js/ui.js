@@ -71,6 +71,68 @@ export function playSynthSound(type) {
     }
 }
 
+// === IDENTITY SPECTRUM (Prism theme) ===
+// Everyone gets one of 12 equal-lightness hues from their display name, so the
+// same person has the same colour on their tile, name tag and chat messages.
+export function hueIndexFor(name) {
+    let hash = 0;
+    const seed = String(name || '').trim().toLowerCase();
+    for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    return hash % 12;
+}
+export function whoColor(index) {
+    return `oklch(0.82 0.11 ${index * 30 + 15}deg)`;
+}
+
+// Header edge: one segment per person present — a full room forms the rainbow.
+export function updateRoomSpectrum() {
+    const header = document.getElementById('room-header');
+    if (!header) return;
+    const hues = Array.from(document.querySelectorAll('#videoGrid .video-tile:not(.screen-share)'))
+        .map(t => t.style.getPropertyValue('--who-h'))
+        .filter(v => v !== '')
+        .map(Number)
+        .sort((a, b) => a - b);
+    if (!hues.length) {
+        if (header.dataset.spectrum) { delete header.dataset.spectrum; header.style.removeProperty('--room-spectrum'); }
+        return;
+    }
+    const step = 100 / hues.length;
+    const stops = hues.map((h, i) => `${whoColor(h)} ${(i * step).toFixed(2)}% ${((i + 1) * step).toFixed(2)}%`);
+    // Runs on every layout pass; only touch the style when the room's hues changed.
+    const spectrum = `linear-gradient(90deg, ${stops.join(', ')})`;
+    if (header.dataset.spectrum === spectrum) return;
+    header.dataset.spectrum = spectrum;
+    header.style.setProperty('--room-spectrum', spectrum);
+}
+
+// === THEME SWITCH (Pixel / Prism), persisted, applied pre-paint in index.html ===
+export function initThemeSwitch() {
+    const buttons = document.querySelectorAll('[data-theme-choice]');
+    const render = () => {
+        const current = document.documentElement.dataset.theme === 'prism' ? 'prism' : 'pixel';
+        buttons.forEach(b => b.setAttribute('aria-checked', String(b.dataset.themeChoice === current)));
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.content = current === 'prism' ? '#111219' : '#0a0b10';
+    };
+    buttons.forEach(b => b.addEventListener('click', () => {
+        const choice = b.dataset.themeChoice;
+        if (choice === 'prism') document.documentElement.dataset.theme = 'prism';
+        else delete document.documentElement.dataset.theme;
+        try { localStorage.setItem('portal_theme', choice); } catch (e) {}
+        render();
+    }));
+    // arrow keys move between the two radios
+    buttons.forEach((b, i) => b.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        const next = buttons[(i + (e.key === 'ArrowRight' ? 1 : buttons.length - 1)) % buttons.length];
+        next.focus();
+        next.click();
+    }));
+    render();
+}
+
 // === DOCK LABEL: swaps the caption, keeps the pixel icon, keeps AT in sync ===
 export function setDockLabel(btn, text) {
     if (!btn) return;
@@ -222,6 +284,8 @@ export function recalculateLayout() {
     }
 
     updateSpeakerHighlight(rawTiles, targetMaximizeId);
+
+    updateRoomSpectrum();
 
     // Keep resize handles/gutter in sync (dynamic import avoids circular deps)
     import('./resize.js').then(m => m.syncResizeAfterLayout()).catch(() => {});
