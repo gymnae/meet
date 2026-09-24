@@ -474,7 +474,7 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 [data-theme="prism"] #control-dock {
     width: auto;
     align-self: center;
-    margin: 0 auto calc(var(--s-3) + env(safe-area-inset-bottom));
+    margin: 0 auto calc(var(--s-3) + var(--safe-bottom));
     padding: var(--s-2);
     gap: var(--s-2);
     background: rgb(26 28 40 / .9);
@@ -512,19 +512,33 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 @media (hover: hover) { [data-theme="prism"] .dock-btn.leave:hover { background: #ff5a57; border-color: #ff5a57; } }
 
 @media (max-width: 768px) {
-    [data-theme="prism"] #control-dock { width: calc(100% - 16px); margin-bottom: calc(8px + env(safe-area-inset-bottom)); padding: 6px; gap: 4px; justify-content: space-between; }
+    [data-theme="prism"] #control-dock {
+        width: calc(100% - 16px - var(--safe-left) - var(--safe-right));
+        margin-bottom: calc(8px + var(--safe-bottom));
+        padding: 6px;
+        gap: 4px;
+        justify-content: space-between;
+    }
     [data-theme="prism"] .dock-btn { min-width: 44px; width: auto; flex: 1 1 0; height: 46px; border-radius: var(--r-m); }
     [data-theme="prism"] .dock-btn.leave { margin-left: 4px; }
 }
 @media (max-height: 500px) {
-    [data-theme="prism"] #control-dock { margin-bottom: 6px; }
+    [data-theme="prism"] #control-dock {
+        width: calc(100% - 12px - var(--safe-left) - var(--safe-right));
+        margin-bottom: calc(6px + var(--safe-bottom));
+    }
 }
 [data-theme="prism"] body.pseudo-fullscreen #control-dock {
-    position: absolute !important;
-    left: 50% !important; bottom: 12px !important;
+    position: relative !important;
+    left: auto !important; bottom: auto !important;
     width: auto !important;
-    transform: translateX(-50%);
+    transform: none;
     background: rgb(26 28 40 / .9) !important;
+}
+@media (max-width: 768px) {
+    [data-theme="prism"] body.pseudo-fullscreen #control-dock {
+        width: calc(100% - 16px - var(--safe-left) - var(--safe-right)) !important;
+    }
 }
 
 /* --------------------------------------------------------------------------
