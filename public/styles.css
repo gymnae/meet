@@ -389,6 +389,12 @@ body.is-recording .rec-chip { display: inline-flex; }
 /* Mobile: chat is a bottom sheet — videos remain visible above it */
 @media (max-width: 768px) { body.chat-open .grid { height: calc(100% - 55dvh); } }
 
+/* The drawer lives inside #video-container (z-index: 1), so its own z-index is
+   trapped in this stacking context and the dock (999) paints over it. Raise
+   the container above the dock while the sheet is open — the sheet is the only
+   thing in it that reaches the dock's screen area, so nothing else changes. */
+@media (max-width: 768px) { body.chat-open #video-container { z-index: 1000; } }
+
 /* --- tile --- */
 .video-tile {
     position: relative;
