@@ -45,27 +45,37 @@ function syncDrawerToViewport() {
     const drawer = document.getElementById('chatDrawer');
     if (!drawer || !isChatOpen) return;
 
+    // Mobile: the sheet is positioned purely from visualViewport, which is the
+    // only reliable source on iOS (the layout viewport does NOT shrink when the
+    // keyboard opens, and `interactive-widget=resizes-content` is Chromium-only).
     if (window.innerWidth <= 768 && window.visualViewport) {
         const vv = window.visualViewport;
-        const isKeyboardOpen = vv.height < (window.innerHeight - 60);
+        // Keyboard heuristic: compare against the tallest viewport seen so far
+        // (keyboard-closed baseline) rather than window.innerHeight, which is
+        // unreliable on iOS with a position:fixed body.
+        if (vv.height > largestVVHeight) largestVVHeight = vv.height;
+        const isKeyboardOpen = vv.height < largestVVHeight - 60;
 
         drawer.classList.toggle('keyboard-open', isKeyboardOpen);
 
-        // Bottom sheet: keep videos visible above the drawer.
-        // When the keyboard opens, the sheet tracks the visualViewport top.
+        // Bottom sheet: keep videos visible above the drawer. The sheet's bottom
+        // edge follows the visual viewport so it always sits above the keyboard.
+        const vvBottom = vv.offsetTop + vv.height; // distance from layout-viewport top
         drawer.style.position = 'fixed';
         drawer.style.left = `${vv.offsetLeft}px`;
         drawer.style.width = `${vv.width}px`;
-        if (isKeyboardOpen) {
-            drawer.style.top = `${vv.offsetTop}px`;
-            drawer.style.height = `${vv.height}px`;
-            drawer.style.bottom = 'auto';
-        } else {
-            drawer.style.top = 'auto';
-            drawer.style.height = '55dvh';
-            drawer.style.bottom = '0';
-        }
+        drawer.style.height = isKeyboardOpen
+            ? `${Math.min(vv.height, Math.round(largestVVHeight * 0.65))}px`
+            : '55dvh';
+        drawer.style.top = 'auto';
+        drawer.style.bottom = `${Math.max(0, document.documentElement.clientHeight - vvBottom)}px`;
+
+        // Lift the control dock above the keyboard so it can never occlude the
+        // chat input bar (iOS keeps the dock pinned to the layout viewport).
+        const kbOffset = Math.max(0, document.documentElement.clientHeight - vvBottom);
+        document.documentElement.style.setProperty('--kb-offset', `${kbOffset}px`);
     } else {
+        document.documentElement.style.setProperty('--kb-offset', '0px');
         drawer.classList.remove('keyboard-open');
         drawer.style.position = '';
         drawer.style.top = '';
@@ -75,6 +85,8 @@ function syncDrawerToViewport() {
         drawer.style.bottom = '';
     }
 }
+// Tallest visual viewport seen so far (keyboard-closed baseline).
+let largestVVHeight = 0;
 
 export function toggleChat() {
     const drawer = document.getElementById('chatDrawer');

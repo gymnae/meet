@@ -1045,14 +1045,29 @@ body.gutter-dragging .video-tile { pointer-events: none; }
    -------------------------------------------------------------------------- */
 body.pseudo-fullscreen #room-header { display: none !important; }
 body.pseudo-fullscreen #control-dock {
-    position: absolute !important;
+    position: fixed !important;
     bottom: 0 !important; left: 0 !important;
     width: 100% !important;
     background: rgb(13 14 27 / .94) !important;
 }
+/* iOS keeps home-indicator safe area even in immersive mode */
+body.pseudo-fullscreen #control-dock {
+    padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px)) !important;
+}
 body.pseudo-fullscreen #video-container { padding-bottom: 96px !important; }
 body.pseudo-fullscreen #tile_local_camera { bottom: 110px !important; }
 body.pseudo-fullscreen #camMenu, body.pseudo-fullscreen #reactionMenu, body.pseudo-fullscreen #micMenu { bottom: 96px; }
+
+/* --- mobile keyboard fit ---------------------------------------------------
+   `interactive-widget=resizes-content` is Chromium-only. On iOS the layout
+   viewport never shrinks, so the dock (fixed to the layout-viewport bottom)
+   would sit behind the keyboard and occlude the chat input. Track the visual
+   viewport with a CSS var set from JS and lift the dock above the keyboard. */
+@media (max-width: 768px) {
+    body.chat-open #control-dock { transform: translateY(var(--kb-offset, 0px)); }
+    /* drawer height when keyboard is open is set inline from visualViewport */
+    .chat-drawer.keyboard-open .chat-stream { flex: 1 1 auto; }
+}
 
 /* --------------------------------------------------------------------------
    12. Landscape phones

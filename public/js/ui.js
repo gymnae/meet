@@ -351,9 +351,16 @@ export function updateHandBadge(participantIdentity, isRaised) {
 
 export function toggleFullscreen() {
     const btn = document.getElementById('btnFullscreen');
-    const isNativeSupported = document.fullscreenEnabled || document.webkitFullscreenEnabled;
+    // iOS Safari (iPhone & iPad) reports webkitFullscreenEnabled but cannot
+    // request fullscreen on arbitrary elements — only <video>. Detect it and
+    // use the pseudo-fullscreen mode instead of a failing native attempt.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.userAgent.includes('Macintosh') && 'ontouchend' in document);
+    const canNativeFullscreen = !isIOS &&
+        typeof document.documentElement.requestFullscreen === 'function' &&
+        (document.fullscreenEnabled || document.webkitFullscreenEnabled);
 
-    if (isNativeSupported) {
+    if (canNativeFullscreen) {
         const isFull = document.fullscreenElement || document.webkitFullscreenElement;
         if (!isFull) {
             const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
