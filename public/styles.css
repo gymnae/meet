@@ -1064,6 +1064,20 @@ body.pseudo-fullscreen #video-container { padding-bottom: 96px !important; }
 body.pseudo-fullscreen #tile_local_camera { bottom: 110px !important; }
 body.pseudo-fullscreen #camMenu, body.pseudo-fullscreen #reactionMenu, body.pseudo-fullscreen #micMenu { bottom: 96px; }
 
+/* Mobile: keep the dock in normal flow. Fixing it to the viewport would shrink
+   #video-container and yank the absolutely-positioned local PiP to a new
+   anchor, which read as a permanent "jump" when toggling immersive mode. */
+@media (max-width: 768px) {
+    body.pseudo-fullscreen #control-dock {
+        position: relative !important;
+        bottom: auto !important; left: auto !important;
+        width: 100% !important;
+        background: var(--bar) !important;
+    }
+    body.pseudo-fullscreen #video-container { padding-bottom: 10px !important; }
+    body.pseudo-fullscreen #tile_local_camera { bottom: 8px !important; }
+}
+
 /* --- mobile keyboard fit ---------------------------------------------------
    `interactive-widget=resizes-content` is Chromium-only. On iOS the layout
    viewport never shrinks, so the dock (fixed to the layout-viewport bottom)
