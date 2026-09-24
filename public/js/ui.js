@@ -379,11 +379,9 @@ function togglePseudoFullscreen(btn) {
     if (isPseudoActive) {
         setDockLabel(btn, "Exit");
         btn.classList.add('active-on');
-        window.scrollTo(0, 1); 
     } else {
         setDockLabel(btn, "Full");
         btn.classList.remove('active-on');
-        window.scrollTo(0, 0);
     }
     recalculateLayout();
 }
