@@ -279,7 +279,7 @@ async function handleRecordingStopped(recorder, chunks, startTime) {
 
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `meet-recording-${stamp}.${ext}`;
+    const filename = `schnackn-recording-${stamp}.${ext}`;
 
     // Bonus: auto-share into the chat so everyone can download (10m TTL applies)
     if (AppState.activeRoom) {

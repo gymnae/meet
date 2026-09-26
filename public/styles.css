@@ -203,7 +203,7 @@ a { color: var(--role-info); }
     opacity: .9;
 }
 
-.wordmark { display: block; width: 168px; height: auto; margin: 0 auto; }
+.wordmark { display: block; width: min(252px, 100%); height: auto; margin: 0 auto; }
 .wm-letters { fill: var(--role-brand); }
 .wm-dot     { fill: var(--role-info); }
 .wm-shadow  { fill: var(--role-struct); }
@@ -1138,7 +1138,7 @@ body.pseudo-fullscreen #micMenu { bottom: calc(76px + var(--safe-bottom)); }
     }
     body.pseudo-fullscreen #video-container { padding: 4px !important; }
     .setup-box { padding: var(--s-5); gap: var(--s-3); }
-    .wordmark { width: 132px; }
+    .wordmark { width: min(220px, 100%); }
 }
 
 /* --------------------------------------------------------------------------
