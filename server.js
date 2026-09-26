@@ -8,6 +8,7 @@ import compression from 'compression';
 import Database from 'better-sqlite3';
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 import { fileURLToPath } from 'url';
+import { Readable } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +36,100 @@ if (!fs.existsSync(DATA_DIR)) {
 const uploadDir = path.join(DATA_DIR, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Sound board library, from one of two sources:
+// - SOUNDBOARD_URL: a running Mumble Retro Soundboard (/api/sounds, /sounds/<file>).
+//   Its files are passed through this server, so browsers never talk to it directly.
+//   Credentials in the URL (https://user:pass@host) are sent as Basic auth.
+// - SOUNDS_DIR: a flat folder of audio files, e.g. the soundboard's sounds folder
+//   mounted read-only. A missing folder just means no sound board.
+const SOUNDS_DIR = process.env.SOUNDS_DIR || path.join(__dirname, 'sounds');
+const SOUND_EXTENSIONS = new Set(['.mp3', '.wav', '.m4a', '.ogg', '.flac']);
+// Every listener downloads and decodes a sound in full, so long tracks are left out.
+const SOUND_MAX_BYTES = (Number(process.env.SOUNDS_MAX_MB) || 3) * 1024 * 1024;
+const SOUNDBOARD = parseSoundboardUrl(process.env.SOUNDBOARD_URL);
+const SOUNDBOARD_LIST_TTL = 60 * 1000;
+const SOUNDBOARD_RETRY = 10 * 1000;
+
+function parseSoundboardUrl(raw) {
+    if (!raw) return null;
+    try {
+        const url = new URL(raw);
+        const headers = {};
+        if (url.username || url.password) {
+            const auth = `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`;
+            headers.Authorization = `Basic ${Buffer.from(auth).toString('base64')}`;
+            url.username = url.password = '';
+        }
+        return { base: url.href.replace(/\/+$/, ''), headers };
+    } catch (e) {
+        console.error('[Sounds] Ignoring invalid SOUNDBOARD_URL');
+        return null;
+    }
+}
+
+function isSoundName(name) {
+    return typeof name === 'string' && !name.startsWith('.') && !/[\\/]/.test(name) &&
+        SOUND_EXTENSIONS.has(path.extname(name).toLowerCase());
+}
+
+function sortSounds(names) {
+    return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }));
+}
+
+function listFolderSounds() {
+    let entries;
+    try {
+        entries = fs.readdirSync(SOUNDS_DIR, { withFileTypes: true });
+    } catch (e) {
+        return [];
+    }
+    return sortSounds(entries
+        .filter(e => e.isFile() && isSoundName(e.name))
+        .filter(e => {
+            try { return fs.statSync(path.join(SOUNDS_DIR, e.name)).size <= SOUND_MAX_BYTES; }
+            catch (err) { return false; }
+        })
+        .map(e => e.name));
+}
+
+function soundboardFetch(pathname, headers = {}) {
+    return fetch(`${SOUNDBOARD.base}${pathname}`, {
+        headers: { ...SOUNDBOARD.headers, ...headers },
+        signal: AbortSignal.timeout(30 * 1000)
+    });
+}
+
+// Cached list from the soundboard. If it is unreachable, the last list stays in use.
+const soundboardList = { names: [], fetchedAt: 0, pending: null };
+async function listSoundboardSounds() {
+    if (Date.now() - soundboardList.fetchedAt < SOUNDBOARD_LIST_TTL) return soundboardList.names;
+    if (!soundboardList.pending) {
+        soundboardList.pending = soundboardFetch('/api/sounds')
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                const sounds = Array.isArray(data?.sounds) ? data.sounds : [];
+                soundboardList.names = sortSounds(sounds
+                    .filter(s => isSoundName(s?.name) && !(s.size > SOUND_MAX_BYTES))
+                    .map(s => s.name));
+                soundboardList.fetchedAt = Date.now();
+            })
+            .catch(err => {
+                console.error('[Sounds] Soundboard unreachable:', err.message);
+                soundboardList.fetchedAt = Date.now() - SOUNDBOARD_LIST_TTL + SOUNDBOARD_RETRY;
+            })
+            .finally(() => { soundboardList.pending = null; });
+    }
+    await soundboardList.pending;
+    return soundboardList.names;
+}
+
+function listSounds() {
+    return SOUNDBOARD ? listSoundboardSounds() : Promise.resolve(listFolderSounds());
 }
 
 // Database setup (stored in the data dir so it survives container recreation)
@@ -265,6 +360,42 @@ app.get('/api/files/:fileId', (req, res) => {
     }
 
     res.download(filePath, file.original_name);
+});
+
+// Sound board library
+app.get('/api/sounds', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.json({ sounds: await listSounds() });
+});
+
+app.get('/api/sounds/:file', async (req, res) => {
+    const name = req.params.file;
+    if (!(await listSounds()).includes(name)) {
+        return res.status(404).send('Sound not found.');
+    }
+    res.setHeader('Cache-Control', 'no-cache');
+    if (!SOUNDBOARD) {
+        return res.sendFile(name, { root: SOUNDS_DIR, dotfiles: 'deny' });
+    }
+
+    try {
+        const conditional = {};
+        ['if-none-match', 'if-modified-since'].forEach(h => { if (req.headers[h]) conditional[h] = req.headers[h]; });
+        const upstream = await soundboardFetch(`/sounds/${encodeURIComponent(name)}`, conditional);
+        if (upstream.status === 304) return res.status(304).end();
+        if (!upstream.ok || !upstream.body) {
+            return res.status(upstream.status === 404 ? 404 : 502).send('Sound unavailable.');
+        }
+        ['content-type', 'content-length', 'etag', 'last-modified'].forEach(h => {
+            const value = upstream.headers.get(h);
+            if (value) res.setHeader(h, value);
+        });
+        Readable.fromWeb(upstream.body).on('error', () => res.destroy()).pipe(res);
+    } catch (err) {
+        console.error('[Sounds] Soundboard file failed:', err.message);
+        if (!res.headersSent) res.status(502).send('Sound unavailable.');
+        else res.destroy();
+    }
 });
 
 // Background Auto-Purge Worker (Every 10 seconds)

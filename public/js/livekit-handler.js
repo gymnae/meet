@@ -2,6 +2,7 @@ import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js'
 import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
+import { loadSoundLibrary, isSoundLibraryLoaded, getSoundLibrary, renderSoundsPanel, handleSoundPacket, stopAllSounds } from './soundboard.js';
 
 export function ensureParticipantTile(participant, streamSource = 'camera') {
     const isLocalUser = participant.isLocal || (AppState.activeRoom && participant.identity === AppState.activeRoom.localParticipant?.identity);
@@ -189,6 +190,8 @@ export function handleIncomingDataPacket(payload, participant) {
             document.getElementById(`msg_${data.id}`)?.remove();
         } else if (data.type === 'FILE_SHARED') {
             renderFile(data.payload, false);
+        } else if (data.type === 'SOUND_PLAY' || data.type === 'SOUND_STOP') {
+            handleSoundPacket(data, participant);
         }
     } catch (e) {
         console.error("[DataChannel] Packet parse error:", e);
@@ -208,7 +211,71 @@ export function toggleReactionMenu() {
         return;
     }
 
+    renderReactionMenu(menu);
+    menu.style.display = 'flex';
+    // The Sounds tab appears once the library is known to have sounds
+    if (!isSoundLibraryLoaded()) {
+        loadSoundLibrary().then(sounds => {
+            if (sounds.length && menu.style.display === 'flex') renderReactionMenu(menu);
+        });
+    }
+}
+
+const REACT_TAB_KEY = 'portal_react_tab';
+const REACT_TABS = [
+    { value: 'reactions', label: 'Reactions' },
+    { value: 'sounds', label: 'Sounds' },
+];
+
+function renderReactionMenu(menu) {
     menu.innerHTML = '';
+    const hasSounds = getSoundLibrary().length > 0;
+    let current = 'reactions';
+    try { if (hasSounds && localStorage.getItem(REACT_TAB_KEY) === 'sounds') current = 'sounds'; } catch (e) {}
+    menu.classList.toggle('has-sounds', hasSounds);
+
+    const panel = document.createElement('div');
+    panel.id = 'reactionPanel';
+    panel.className = 'react-panel';
+
+    if (hasSounds) {
+        const tabs = document.createElement('div');
+        tabs.className = 'react-tabs';
+        tabs.setAttribute('role', 'tablist');
+        tabs.setAttribute('aria-label', 'Reactions and sounds');
+        REACT_TABS.forEach(({ value, label }) => {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-selected', String(value === current));
+            tab.setAttribute('aria-controls', panel.id);
+            tab.tabIndex = value === current ? 0 : -1;
+            tab.textContent = label;
+            tab.onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if (value === current) return;
+                try { localStorage.setItem(REACT_TAB_KEY, value); } catch (err) {}
+                renderReactionMenu(menu);
+                menu.querySelector(`[role="tab"][aria-selected="true"]`)?.focus();
+            };
+            tab.onkeydown = (e) => {
+                if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                e.preventDefault();
+                tabs.querySelector('[role="tab"][aria-selected="false"]')?.click();
+            };
+            tabs.append(tab);
+        });
+        panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-label', current === 'sounds' ? 'Sounds' : 'Reactions');
+        menu.append(tabs);
+    }
+    menu.append(panel);
+
+    if (current === 'sounds') renderSoundsPanel(panel);
+    else renderReactions(panel, menu);
+}
+
+function renderReactions(panel, menu) {
     const handBtn = document.createElement('button');
     handBtn.className = 'react-item';
     handBtn.innerText = AppState.handRaised ? "Lower hand" : "Raise hand";
@@ -219,7 +286,7 @@ export function toggleReactionMenu() {
         sendDataPacket({ type: 'HAND_RAISE', raised: AppState.handRaised });
         menu.style.display = 'none';
     };
-    menu.appendChild(handBtn);
+    panel.appendChild(handBtn);
 
     const emojis = ['👏', '👍', '🎉', '😊', '😢'];
     const emojiGrid = document.createElement('div');
@@ -238,8 +305,7 @@ export function toggleReactionMenu() {
         emojiGrid.appendChild(emojiBtn);
     });
 
-    menu.appendChild(emojiGrid);
-    menu.style.display = 'flex';
+    panel.appendChild(emojiGrid);
 }
 
 export function checkMassMuteRules() {
@@ -606,6 +672,7 @@ export function cleanupAllTilesForParticipant(participantIdentity) {
 }
 
 export function terminateSession(shouldReload = true) {
+    stopAllSounds();
     teardownAllNormalization();
     document.body.classList.remove('in-session');
     AppState.preWarmedTracks.forEach(track => { try { track.stop(); } catch(e){} });

@@ -2,6 +2,7 @@ import { AppState } from './state.js';
 import { sendDataPacket } from './livekit-handler.js';
 import { renderFile, renderMessage, scrollChatToBottom, renderSystemNote } from './chat.js';
 import { setDockLabel } from './ui.js';
+import { getSoundEffectsStream } from './audio-normalizer.js';
 
 let recTimer = null;
 function startRecTimer(btn, startTime) {
@@ -171,6 +172,9 @@ async function startRecording() {
         if (micPub?.audioTrack?.mediaStreamTrack && !AppState.micMuted) {
             attachStream(new MediaStream([micPub.audioTrack.mediaStreamTrack]));
         }
+
+        // Sound board effects (played locally, so they are not in any remote track)
+        try { attachStream(getSoundEffectsStream()); } catch (e) {}
 
         audioDest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
 

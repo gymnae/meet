@@ -334,6 +334,20 @@ export function triggerFloatingEmoji(tileId, emoji) {
     setTimeout(() => floatingEl.remove(), 1800);
 }
 
+/** Shows which sound someone played, on their tile. */
+export function triggerFloatingLabel(tileId, text) {
+    const tile = document.getElementById(tileId);
+    if (!tile) return;
+    tile.querySelector('.floating-sound')?.remove();
+
+    const el = document.createElement('div');
+    el.className = 'floating-sound';
+    el.innerHTML = '<svg class="icon icon--16" aria-hidden="true"><use class="ic-pixel" href="#i-sound"/><use class="ic-smooth" href="#s-sound"/></svg><span></span>';
+    el.querySelector('span').textContent = text;
+    tile.appendChild(el);
+    setTimeout(() => el.remove(), 2400);
+}
+
 export function updateHandBadge(participantIdentity, isRaised) {
     const isLocal = !participantIdentity || participantIdentity === 'local' || (AppState.activeRoom && participantIdentity === AppState.activeRoom.localParticipant?.identity);
     const tileId = isLocal ? 'tile_local_camera' : `tile_${participantIdentity}_camera`;

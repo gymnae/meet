@@ -374,8 +374,18 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 [data-theme="prism"] .sound-seg button { background: transparent; border: 0; border-radius: 8px; }
 [data-theme="prism"] .sound-seg button[aria-checked="true"] { color: var(--ink); background: var(--light); }
 [data-theme="prism"] .sound-reset { border-color: var(--line); }
+[data-theme="prism"] .react-tabs { padding: 2px; gap: 2px; background: var(--surface-2); border: 0; border-radius: var(--r-s); }
+[data-theme="prism"] .react-tabs button { background: transparent; border: 0; border-radius: 8px; }
+[data-theme="prism"] .react-tabs button[aria-selected="true"] { color: var(--ink); background: var(--light); }
+[data-theme="prism"] :is(.sfx-btn, .sfx-search) { border: 1px solid transparent; border-radius: var(--r-m); }
+[data-theme="prism"] .sfx-btn[aria-pressed="true"] { border-color: var(--light); }
+[data-theme="prism"] .sfx-btn.is-playing::before { background: rgb(255 255 255 / .14); }
+[data-theme="prism"] .sfx-note { border-radius: var(--r-s); }
+[data-theme="prism"] .floating-sound { border-color: rgb(255 255 255 / .16); border-radius: var(--r-s); }
+[data-theme="prism"] .floating-sound .icon { color: var(--light); }
 @media (hover: hover) {
-    [data-theme="prism"] :is(.cam-item:hover:not(:disabled), .react-item:hover, .react-emoji-btn:hover) { background: var(--surface-3); border-color: transparent; }
+    [data-theme="prism"] :is(.cam-item:hover:not(:disabled), .react-item:hover, .react-emoji-btn:hover, .sfx-btn:hover) { background: var(--surface-3); border-color: transparent; }
+    [data-theme="prism"] .react-tabs button[aria-selected="false"]:hover { background: var(--surface-3); }
     [data-theme="prism"] .cam-item.turn-off:hover { background: #ff5a57; border-color: #ff5a57; }
 }
 

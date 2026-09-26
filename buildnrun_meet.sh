@@ -12,6 +12,16 @@ else
   sudo chown -R 10001:10001 "$DATA_HOST_DIR" 2>/dev/null || chmod -R a+rwX "$DATA_HOST_DIR"
 fi
 
+# Optional sound board library, shared with the Mumble soundboard. Either set
+# SOUNDBOARD_URL to the running soundboard, or SOUNDS_HOST_DIR to its sounds folder
+# (mounted read-only; the files only need to be readable for uid 10001).
+SOUNDBOARD_URL=""
+SOUNDS_HOST_DIR=""
+SOUNDS_MOUNT=()
+if [ -n "$SOUNDS_HOST_DIR" ]; then
+  SOUNDS_MOUNT=(-v "$SOUNDS_HOST_DIR:/app/sounds:ro")
+fi
+
 docker build -t meet .
 docker kill meet
 docker rm meet
@@ -23,5 +33,7 @@ docker run -d \
   -e LIVEKIT_API_KEY="<YOURLIVEKITAPIKEY>" \
   -e LIVEKIT_API_SECRET="<YOURLIVEKITAPISECRET>" \
   -e DATA_DIR=/app/data \
+  -e SOUNDBOARD_URL="$SOUNDBOARD_URL" \
   -v "$DATA_HOST_DIR:/app/data" \
+  "${SOUNDS_MOUNT[@]}" \
   meet

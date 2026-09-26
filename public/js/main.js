@@ -13,6 +13,7 @@ import {
     attachNormalizedRemoteAudio, detachNormalizedRemoteAudio, getMicConstraints
 } from './audio-normalizer.js';
 import { toggleSoundMenu, refreshSoundMenu } from './sound-menu.js';
+import { loadSoundLibrary } from './soundboard.js';
 import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
 import { initCapabilityChecks, refreshControlVisibility } from './capabilities.js';
@@ -297,6 +298,7 @@ async function initiateCall() {
         });
 
         broadcastCodecPreference();
+        loadSoundLibrary();
 
         for (const track of AppState.preWarmedTracks) {
             if (track.kind === 'video') {

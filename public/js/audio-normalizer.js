@@ -4,6 +4,7 @@
 // Outgoing: local mic track is routed through a leveling graph before publishing.
 // Incoming: remote microphone tracks are routed through the same graph for playback.
 // Screen share audio is never routed through this module and stays untouched.
+// Sound board effects play on their own bus, with their own volume and on/off switch.
 //
 // Every graph has a wet (leveled) and a dry (raw) path, so leveling strength and
 // volumes change live without republishing or re-attaching anything.
@@ -26,6 +27,8 @@ const DEFAULT_SETTINGS = {
     noiseSuppression: true,
     echoCancellation: true,
     autoGainControl: true,
+    sfxEnabled: true,             // play sound board effects
+    sfxVolume: 0.7,               // sound board volume, 0..2 (effects are mastered louder than speech)
 };
 
 let settings = loadSettings();
@@ -33,6 +36,9 @@ const peerVolumes = new Map();    // participant identity -> 0..2 (this session 
 
 let sharedAudioContext = null;
 let masterGain = null;            // incoming voices -> masterGain -> speakers
+let sfxBus = null;                // sound board effects -> sfxBus -> sfxGain -> speakers
+let sfxGain = null;
+let sfxRecordTap = null;          // sfxBus -> MediaStream, for the recorder
 const outgoingProcs = new Map();  // original MediaStreamTrack -> { chain, micGain, processedTrack }
 const incomingProcs = new Map();  // remote MediaStreamTrack -> { chain, peerGain, element, identity }
 
@@ -116,6 +122,7 @@ function applyLeveling(chain, presetName, immediate = false) {
 
 function applyLiveSettings() {
     if (masterGain) rampTo(masterGain.gain, settings.volume);
+    if (sfxGain) rampTo(sfxGain.gain, settings.sfxVolume);
     incomingProcs.forEach(proc => applyLeveling(proc.chain, settings.incomingLeveling));
     outgoingProcs.forEach(proc => {
         applyLeveling(proc.chain, settings.outgoingLeveling);
@@ -150,6 +157,7 @@ function getSharedContext() {
     if (sharedAudioContext && sharedAudioContext.state !== 'closed') return sharedAudioContext;
     sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)();
     masterGain = null;
+    sfxBus = sfxGain = sfxRecordTap = null;
     return sharedAudioContext;
 }
 
@@ -160,6 +168,30 @@ function getMasterGain(context) {
         masterGain.connect(context.destination);
     }
     return masterGain;
+}
+
+/** The node sound board effects connect to, and its context. */
+export function getSoundEffectsOutput() {
+    const context = getSharedContext();
+    if (context.state === 'suspended') context.resume().catch(() => {});
+    if (!sfxBus) {
+        sfxGain = context.createGain();
+        sfxGain.gain.value = settings.sfxVolume;
+        sfxGain.connect(context.destination);
+        sfxBus = context.createGain();
+        sfxBus.connect(sfxGain);
+    }
+    return { context, node: sfxBus };
+}
+
+/** Sound board effects as a MediaStream at full level, so recordings include them. */
+export function getSoundEffectsStream() {
+    const { context, node } = getSoundEffectsOutput();
+    if (!sfxRecordTap) {
+        sfxRecordTap = context.createMediaStreamDestination();
+        node.connect(sfxRecordTap);
+    }
+    return sfxRecordTap.stream;
 }
 
 /**
@@ -285,5 +317,6 @@ export function teardownAllNormalization() {
     }
     sharedAudioContext = null;
     masterGain = null;
+    sfxBus = sfxGain = sfxRecordTap = null;
     console.log("[AudioNorm] All normalization graphs released.");
 }

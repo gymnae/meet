@@ -656,8 +656,91 @@ body.gutter-dragging .video-tile { pointer-events: none; }
 }
 .react-emoji-btn:active { transform: translate(1px, 1px); }
 
+/* Reaction menu tabs: Reactions | Sounds (only when there is a sound library) */
+#reactionMenu.has-sounds {
+    width: min(320px, calc(100vw - 24px));
+    /* stay inside the video area; the sound list shrinks and scrolls instead */
+    max-height: calc(100% - 96px - var(--safe-bottom) - var(--s-2));
+    overflow-y: auto;
+}
+.react-tabs { display: grid; grid-template-columns: 1fr 1fr; flex: none; border: 1px solid var(--line); }
+.react-tabs button {
+    min-height: var(--tap);
+    font: 600 var(--fs-small)/1 var(--font-ui);
+    color: var(--text-2);
+    background: var(--surface-2);
+    border: 0;
+    border-radius: 0;
+    cursor: pointer;
+}
+.react-tabs button + button { border-left: 1px solid var(--line); }
+.react-tabs button[aria-selected="true"] { color: var(--ink); background: var(--role-info); }
+.react-panel { display: flex; flex-direction: column; gap: var(--s-1); flex: 1 1 auto; min-height: 0; }
+.react-panel > * { flex: none; }
+.react-tabs + .react-panel { margin-top: var(--s-1); }
+
+/* Sounds tab */
+.sfx-search {
+    width: 100%;
+    min-height: var(--tap);
+    padding: 0 var(--s-3);
+    font-size: var(--fs-body);
+    color: var(--text-1);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 0;
+}
+.sfx-search::placeholder { color: var(--text-3); }
+.react-panel > .sfx-list {
+    display: flex; flex-direction: column; gap: var(--s-1);
+    flex: 0 1 auto; min-height: 88px;
+    max-height: min(22rem, 45dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.sfx-list .sound-subheading { margin: var(--s-1) 0 0; }
+.sfx-list .sound-subheading:first-child { margin-top: 0; }
+.sfx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-1); }
+.sfx-btn {
+    position: relative;
+    min-height: var(--tap);
+    padding: 0 var(--s-2);
+    font: 600 var(--fs-small)/1.2 var(--font-ui);
+    text-align: left;
+    color: var(--text-1);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 0;
+    cursor: pointer;
+    overflow: hidden;
+}
+.sfx-btn span { position: relative; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sfx-btn:active { transform: translate(1px, 1px); }
+.sfx-btn[aria-pressed="true"] { border-color: var(--role-info); }
+/* playback progress of your own sound; click again to stop */
+.sfx-btn.is-playing::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: rgb(0 240 255 / .2);
+    transform-origin: left;
+    animation: sfx-progress var(--sfx-dur, 1s) linear forwards;
+}
+@keyframes sfx-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.sfx-note {
+    display: flex; flex-direction: column; gap: var(--s-2);
+    padding: var(--s-2);
+    font-size: var(--fs-small);
+    color: var(--text-1);
+    border: 1px solid var(--role-time);
+}
+.sfx-note p { margin: 0; }
+.sfx-note-btn { justify-content: center; }
+.sfx-empty, .sfx-hint { margin: 0; font-size: var(--fs-small); color: var(--text-3); }
+.sfx-hint { padding-top: var(--s-1); }
+
 @media (hover: hover) {
-    .cam-item:hover:not(:disabled), .react-item:hover, .react-emoji-btn:hover { background: var(--surface-3); border-color: var(--role-info); }
+    .cam-item:hover:not(:disabled), .react-item:hover, .react-emoji-btn:hover, .sfx-btn:hover { background: var(--surface-3); border-color: var(--role-info); }
+    .react-tabs button[aria-selected="false"]:hover { color: var(--text-1); background: var(--surface-3); }
     .cam-item.turn-off:hover { background: var(--red-600); border-color: var(--red-600); }
 }
 
@@ -757,6 +840,30 @@ body.gutter-dragging .video-tile { pointer-events: none; }
     100% { opacity: 0; transform: translateY(-110px) scale(1); }
 }
 @keyframes fade-hold { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Which sound someone played, on their tile */
+.floating-sound {
+    position: absolute; left: 50%; bottom: 22%;
+    z-index: var(--z-emoji);
+    display: flex; align-items: center; gap: var(--s-2);
+    max-width: calc(100% - 16px);
+    padding: var(--s-1) var(--s-2);
+    font: 600 var(--fs-small)/1.2 var(--font-ui);
+    color: var(--text-1);
+    background: var(--surface-1);
+    border: 1px solid var(--role-info);
+    box-shadow: var(--elev-1);
+    pointer-events: none;
+    transform: translateX(-50%);
+    animation: sound-tag 2.4s var(--ease-out) forwards;
+}
+.floating-sound .icon { color: var(--role-info); }
+.floating-sound span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes sound-tag {
+    0%       { opacity: 0; transform: translate(-50%, 8px); }
+    10%, 75% { opacity: 1; transform: translate(-50%, 0); }
+    100%     { opacity: 0; transform: translate(-50%, -8px); }
+}
 @keyframes blink { 50% { opacity: 0; } }
 
 .desktop-only { }
@@ -1161,6 +1268,8 @@ body.pseudo-fullscreen #micMenu { bottom: calc(76px + var(--safe-bottom)); }
         transition-duration: .01ms !important;
     }
     .floating-emoji { animation: fade-hold 1s linear forwards !important; animation-duration: 1s !important; }
+    .floating-sound { animation: fade-hold 2.4s linear forwards !important; animation-duration: 2.4s !important; }
+    .sfx-btn.is-playing::before { animation-duration: var(--sfx-dur, 1s) !important; }
     .rec-chip::before, .dock-btn.is-recording .icon { animation: none !important; }
 }
 @media (forced-colors: active) {

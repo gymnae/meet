@@ -1,7 +1,9 @@
 // sound-menu.js
 // In-call sound panel: leveling strength and volume for what you hear,
-// per-person volume, and leveling / level / browser processing for your mic.
+// per-person volume, sound board on/off and volume, and leveling / level /
+// browser processing for your mic.
 import { AppState } from './state.js';
+import { getSoundLibrary, stopAllSounds } from './soundboard.js';
 import {
     getAudioSettings, setAudioSetting, resetAudioSettings,
     getPeerVolume, setPeerVolume
@@ -60,6 +62,16 @@ function renderSoundMenu(menu) {
         segmented('Leveling', LEVELING_CHOICES, s.incomingLeveling, v => setAudioSetting('incomingLeveling', v)),
         slider('Volume', s.volume, v => setAudioSetting('volume', v))
     );
+    if (getSoundLibrary().length) {
+        hear.append(
+            subheading('Sound board'),
+            checkbox('Play sounds', s.sfxEnabled, on => {
+                setAudioSetting('sfxEnabled', on);
+                if (!on) stopAllSounds();
+            }),
+            slider('Sounds', s.sfxVolume, v => setAudioSetting('sfxVolume', v))
+        );
+    }
     const peers = [...(AppState.activeRoom?.remoteParticipants.values() || [])];
     if (peers.length) {
         hear.append(subheading('People'));
@@ -164,20 +176,25 @@ function slider(label, value, onChange) {
     return row;
 }
 
-function toggle(key, label, checked) {
+function checkbox(label, checked, onChange) {
     const row = document.createElement('label');
     row.className = 'sound-toggle';
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = checked;
-    input.dataset.processing = key;
     const text = document.createElement('span');
     text.textContent = label;
-    input.addEventListener('change', async () => {
-        setAudioSetting(key, input.checked);
+    input.addEventListener('change', () => onChange(input.checked, input));
+    row.append(input, text);
+    return row;
+}
+
+function toggle(key, label, checked) {
+    const row = checkbox(label, checked, async (on, input) => {
+        setAudioSetting(key, on);
         await applyProcessingChange(input.closest('#soundMenu'));
     });
-    row.append(input, text);
+    row.querySelector('input').dataset.processing = key;
     return row;
 }
 
