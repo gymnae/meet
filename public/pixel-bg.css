@@ -171,5 +171,15 @@ body.in-session .px-bg{display:none;}
   .px-band__track{animation-duration:38s;}
 }
 @media (prefers-reduced-motion:reduce){
-  .px-band__track,.sc-c .ball,.sc-b .rings i{animation:none !important;}
+  /* Keep the ambient panorama moving, but substantially slower. The global
+     reduced-motion rule in styles.css otherwise collapses it to one .01ms
+     iteration, which leaves a static frame on desktop browsers inheriting the
+     OS preference. Scene-level bouncing/pulsing remains disabled. */
+  .px-band__track{
+    animation-name:pxSlide !important;
+    animation-duration:120s !important;
+    animation-timing-function:linear !important;
+    animation-iteration-count:infinite !important;
+  }
+  .sc-c .ball,.sc-b .rings i{animation:none !important;}
 }
