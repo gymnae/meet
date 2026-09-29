@@ -172,14 +172,36 @@ body.in-session .px-bg{display:none;}
 }
 @media (prefers-reduced-motion:reduce){
   /* Keep the ambient panorama moving, but substantially slower. The global
-     reduced-motion rule in styles.css otherwise collapses it to one .01ms
-     iteration, which leaves a static frame on desktop browsers inheriting the
-     OS preference. Scene-level bouncing/pulsing remains disabled. */
+     reduced-motion rule in styles.css otherwise collapses animations to one
+     .01ms iteration, leaving a static frame on browsers inheriting the OS
+     preference. Decorative motion below is also slower and gentler. */
   .px-band__track{
     animation-name:pxSlide !important;
     animation-duration:120s !important;
     animation-timing-function:linear !important;
     animation-iteration-count:infinite !important;
   }
-  .sc-c .ball,.sc-b .rings i{animation:none !important;}
+  .sc-c .ball{
+    animation-name:pxBounceReduced !important;
+    animation-duration:3.5s !important;
+    animation-timing-function:ease-in-out !important;
+    animation-iteration-count:infinite !important;
+    animation-direction:alternate !important;
+  }
+  .sc-b .rings i{
+    animation-name:pxPingReduced !important;
+    animation-duration:5s !important;
+    animation-timing-function:ease-out !important;
+    animation-iteration-count:infinite !important;
+  }
+  .sc-b .rings i:nth-child(2){animation-delay:1.7s !important;}
+}
+@keyframes pxBounceReduced{
+  from{transform:translate3d(0,0,0);}
+  to{transform:translate3d(0,-14px,0);}
+}
+@keyframes pxPingReduced{
+  0%,20%{opacity:0; transform:scale(.85);}
+  35%{opacity:.55;}
+  100%{opacity:0; transform:scale(1.05);}
 }

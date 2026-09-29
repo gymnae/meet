@@ -151,6 +151,16 @@
         </div>
         <div class="px-fade"></div>
     </div>
+    <script>
+        // Each animation half must be wider than the rotated, overscanned
+        // viewport. Duplicate every sequence before first paint so the two
+        // equal halves remain compatible with the seamless -50% keyframe.
+        document.querySelectorAll('.px-seq').forEach(function (sequence) {
+            Array.from(sequence.children).forEach(function (scene) {
+                sequence.appendChild(scene.cloneNode(true));
+            });
+        });
+    </script>
 
     <!-- Join gate -->
     <main class="gate" id="loginSetup">
