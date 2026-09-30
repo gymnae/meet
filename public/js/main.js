@@ -17,6 +17,8 @@ import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
 import { initCapabilityChecks, refreshControlVisibility } from './capabilities.js';
 
+const INITIAL_CONNECT_TIMEOUT_MS = 15000;
+
 window.initiateCall = initiateCall;
 window.toggleMic = toggleMic;
 window.toggleCam = toggleCam;
@@ -79,6 +81,8 @@ async function initiateCall() {
     joinBtn.disabled = true;
     joinBtn.innerText = "Connecting…";
 
+    let joinStage = 'token';
+
     try {
         // Persistent anonymous client ID (localStorage, not a cookie):
         // reconnects on the same device/browser reuse the same ID, so the
@@ -94,7 +98,22 @@ async function initiateCall() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ roomName, nickname, password, clientId })
         });
-        const connectionInfo = await tokenRes.json();
+        if (!tokenRes.ok) {
+            throw new Error('TOKEN_REQUEST_FAILED');
+        }
+
+        let connectionInfo;
+        try {
+            connectionInfo = await tokenRes.json();
+        } catch (e) {
+            throw new Error('TOKEN_RESPONSE_INVALID');
+        }
+
+        if (!connectionInfo || !connectionInfo.serverUrl || !connectionInfo.token) {
+            if (!connectionInfo?.requiresPassword && !connectionInfo?.error) {
+                throw new Error('TOKEN_RESPONSE_INVALID');
+            }
+        }
         
         if (connectionInfo.requiresPassword || (connectionInfo.error && connectionInfo.error.toLowerCase().includes('password'))) {
             document.getElementById('passwordField').hidden = false;
@@ -112,7 +131,7 @@ async function initiateCall() {
         }
 
         if (connectionInfo.error) {
-            showGateError('Could not join: ' + connectionInfo.error);
+            showGateError('Could not get permission to join. Check the room details and try again.');
             joinBtn.disabled = false;
             joinBtn.innerText = "Connect";
             return;
@@ -288,7 +307,19 @@ async function initiateCall() {
             updateSpeakerHighlight();
         });
 
-        await AppState.activeRoom.connect(connectionInfo.serverUrl, connectionInfo.token);
+        joinStage = 'connect';
+        let connectTimer;
+        try {
+            await Promise.race([
+                AppState.activeRoom.connect(connectionInfo.serverUrl, connectionInfo.token),
+                new Promise((resolve, reject) => {
+                    connectTimer = setTimeout(() => reject(new Error('INITIAL_CONNECT_TIMEOUT')), INITIAL_CONNECT_TIMEOUT_MS);
+                })
+            ]);
+        } finally {
+            clearTimeout(connectTimer);
+        }
+        joinStage = 'session';
         
         AppState.participantPreferences.set(AppState.activeRoom.localParticipant.identity, AppState.localPreferredCodec);
 
@@ -326,9 +357,35 @@ async function initiateCall() {
         await syncRoomTransmissions(roomName);
 
     } catch (err) {
-        showToast("Connection failed: " + err.message, "error", 6000);
-        terminateSession(true);
+        // Do not log the SDK error object: authentication failures may include
+        // connection details that should not be exposed in browser logs.
+        console.error(`[Join] ${joinStage} initialization failed (${err?.name || 'Error'})`);
+        terminateSession(false);
+        restoreJoinGate();
+
+        if (joinStage === 'token') {
+            showGateError('Could not get permission to join. Check the room details and server availability, then try again.');
+        } else if (joinStage === 'connect') {
+            showGateError('Could not reach the meeting service. Secure WebSocket (WSS) traffic may be blocked by your network, firewall, or proxy. Check your connection or ask your network administrator, then try again.');
+        } else {
+            showGateError('The meeting could not finish starting. Check your connection and try again.');
+        }
     }
+}
+
+function restoreJoinGate() {
+    document.body.classList.remove('in-session');
+    document.getElementById('loginSetup').style.display = '';
+    const repoLink = document.getElementById('repoLink');
+    if (repoLink) repoLink.style.display = '';
+    document.getElementById('room-header').style.display = 'none';
+    document.getElementById('video-container').style.display = 'none';
+    document.getElementById('control-dock').style.display = 'none';
+    document.querySelectorAll('[id^="tile_"]').forEach(tile => tile.remove());
+
+    const joinBtn = document.getElementById('joinBtn');
+    joinBtn.disabled = false;
+    joinBtn.innerText = 'Connect';
 }
 
 const wakeAllVideos = () => {

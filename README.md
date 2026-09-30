@@ -25,6 +25,8 @@ The browser client is built with vanilla JavaScript and CSS; a small Node.js ser
 - A writable persistent data directory for SQLite and temporary uploads
 - HTTPS for the web app and WSS for LiveKit in production; browsers require a secure context for camera, microphone, and screen access
 
+LiveKit's secure WebSocket (WSS) signaling connection is mandatory even when all media is relayed through TURN. TURN is a media-connectivity fallback and does not replace signaling. Corporate firewalls and proxies must therefore allow outbound WSS/HTTPS to the configured LiveKit host as well as the deployment's required WebRTC/TURN ports.
+
 Configuration is provided through environment variables:
 
 ```env
