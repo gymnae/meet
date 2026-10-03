@@ -144,7 +144,7 @@ a { color: var(--role-info); }
 /* Stepped pixel corners (progressive: square where unsupported) */
 @supports (corner-shape: notch) {
     .setup-box, .primary-btn, .secondary-btn, .share-btn, .dock-btn, .video-tile,
-    #camMenu, #reactionMenu, #micMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn,
+    #camMenu, #reactionMenu, #micMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .share-dialog,
     .avatar-placeholder, .name-tag, .field input {
         corner-shape: notch;
         border-radius: var(--notch);
@@ -1166,4 +1166,81 @@ body.pseudo-fullscreen #micMenu { bottom: calc(76px + var(--safe-bottom)); }
 @media (forced-colors: active) {
     .dock-btn, .primary-btn, .secondary-btn, .share-btn, .video-tile, .chat-drawer, .setup-box { border-color: CanvasText; }
     .dock-btn.active-off, .dock-btn.active-on { forced-color-adjust: none; }
+}
+
+/* --------------------------------------------------------------------------
+   15. Invite dialog (room link, audience link, QR codes)
+   -------------------------------------------------------------------------- */
+.share-dialog {
+    width: min(420px, calc(100vw - var(--s-8)));
+    max-height: calc(100dvh - var(--s-8) - var(--safe-top) - var(--safe-bottom));
+    padding: 0;
+    color: var(--text-1);
+    background: var(--surface-1);
+    border: var(--stroke) solid var(--role-info);
+    box-shadow: var(--elev-hero);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.share-dialog::backdrop { background: var(--scrim); }
+.share-body { display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-4) var(--s-4) var(--s-5); }
+.share-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-right: calc(var(--s-2) * -1); }
+.share-head h2 { margin: 0; font-size: var(--fs-title); line-height: var(--lh-tight); color: var(--role-info); }
+
+.share-section { display: flex; flex-direction: column; gap: var(--s-2); }
+.share-section + .share-section { padding-top: var(--s-4); border-top: 1px solid var(--line); }
+.share-section h3 { margin: 0; font-size: var(--fs-small); font-weight: 600; color: var(--text-2); }
+.share-audience-body { display: flex; flex-direction: column; gap: var(--s-2); }
+.share-note { margin: 0; font-size: var(--fs-small); line-height: var(--lh-body); color: var(--text-3); }
+
+.share-audience > summary {
+    display: flex; align-items: center; gap: var(--s-2);
+    min-height: var(--tap);
+    font-size: var(--fs-small); font-weight: 600;
+    color: var(--text-2);
+    cursor: pointer;
+    list-style: none;
+}
+.share-audience > summary::-webkit-details-marker { display: none; }
+.share-audience > summary::before {
+    content: "";
+    width: 0; height: 0;
+    border-block: 5px solid transparent;
+    border-left: 6px solid currentColor;
+    transition: transform var(--t-fast) var(--ease-out);
+}
+.share-audience[open] > summary::before { transform: rotate(90deg); }
+.share-audience > summary:hover { color: var(--role-info); }
+.share-audience > summary:focus-visible { outline: 2px solid var(--role-info); outline-offset: 2px; }
+
+.share-link-row { display: flex; gap: var(--s-2); }
+.share-link-row input {
+    flex: 1; min-width: 0;
+    font: var(--fs-small)/var(--lh-tight) var(--font-mono);
+    color: var(--text-1);
+    text-overflow: ellipsis;
+    cursor: copy;
+}
+.share-link-row .secondary-btn { flex: none; min-width: 84px; }
+.share-qr-toggle { align-self: flex-start; }
+.secondary-btn:focus-visible, .share-btn:focus-visible { outline: 2px solid var(--role-info); outline-offset: 2px; }
+
+/* QR codes stay black on white with a quiet zone in every theme: scanners need it. */
+.share-qr { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); padding-top: var(--s-2); }
+.share-qr-code { display: block; width: min(260px, 100%); height: auto; image-rendering: pixelated; }
+.share-status { margin: 0; min-height: 1lh; font-size: var(--fs-small); color: var(--role-info); }
+
+/* --- audience mode: listen-only view, reached by an audience link --- */
+.audience-only { display: none !important; }
+body.audience-mode .audience-only { display: flex !important; }
+body.audience-mode :is(#btnMic, #btnCam, #btnReact, #btnChat, #btnScreen, #btnRec, #chatDrawer, .rec-chip) { display: none !important; }
+body.audience-mode #shareDialog .share-audience > summary { display: none; }
+body.audience-mode #btnAudienceQr { color: var(--ink); background: var(--role-info); }
+/* Nobody on stage yet: say so instead of showing an empty stage. */
+body.audience-mode #videoGrid:not(:has(.video-tile))::before {
+    content: "Waiting for the speaker…";
+    grid-column: 1 / -1;
+    place-self: center;
+    font: var(--fs-body)/var(--lh-body) var(--font-mono);
+    color: var(--text-2);
 }

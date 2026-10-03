@@ -40,7 +40,13 @@ export const AppState = {
     participantPreferences: new Map(),
     localPreferredCodec: 'h264',
     currentPublishedCodec: 'h264',
-    isRenegotiating: false
+    isRenegotiating: false,
+    // Sharing: the joined room, its password when protected (goes into invite links),
+    // and the audience id for listen-only links.
+    roomName: '',
+    roomPassword: '',
+    audienceId: null,
+    audienceMode: false
 };
 
 export const videoCaptureProfile = {

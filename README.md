@@ -9,6 +9,8 @@ The browser client is built with vanilla JavaScript and CSS; a small Node.js ser
 ## Features
 
 - Instant rooms via shareable links, with optional password protection
+- Invite dialog with copyable links and QR codes; a protected room's link carries its password
+- Audience links for talks: a listen-only view behind a link that hides the room name and needs no password. Listeners have no mic, camera, chat or sharing, stay invisible to the room, and can pass the link on by QR code
 - Video and audio calls powered by LiveKit, including device selection and graceful audio-only/listen-only fallbacks
 - Responsive participant grids, screen-sharing layouts, resizable picture-in-picture, and fullscreen mode
 - Screen sharing and local browser recording
@@ -77,7 +79,7 @@ The container runs as UID/GID `10001`; ensure the mounted data directory is writ
 
 ## Data lifetime
 
-Chat messages are retained for about 1 minute, shared files for about 10 minutes, and inactive room records for 7 days. SQLite data and uploads live under `DATA_DIR`; media streams are routed through LiveKit.
+Chat messages are retained for about 1 minute, shared files for about 10 minutes, and inactive room records for 7 days. An audience link stops working when its room record is removed. SQLite data and uploads live under `DATA_DIR`; media streams are routed through LiveKit.
 
 ## Acknowledgement
 

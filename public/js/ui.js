@@ -154,15 +154,6 @@ export function showToast(message, variant = 'info', duration = 3600) {
     toastTimer = setTimeout(() => el.classList.remove('show'), duration);
 }
 
-export function copyShareLink() {
-    const roomName = document.getElementById('headerRoomLabel').innerText;
-    const deepLink = `${window.location.origin}${window.location.pathname}#${encodeURIComponent(roomName)}`;
-    
-    navigator.clipboard.writeText(deepLink)
-        .then(() => showToast('Link copied. Anyone with it can join.'))
-        .catch(() => showToast('Could not copy the link. Copy it from the address bar.', 'error'));
-}
-
 export function applyDynamicMirrorEffect(videoTrackInstance) {
     const localTile = document.getElementById('tile_local_camera');
     if (!localTile || !videoTrackInstance || !videoTrackInstance.mediaStreamTrack) return;

@@ -103,7 +103,8 @@
     [data-theme="prism"] :is(.setup-box, .primary-btn, .secondary-btn, .share-btn, .dock-btn, .video-tile,
         #camMenu, #reactionMenu, #micMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .name-tag,
         .field input, #control-dock, .cam-item, .react-item, .react-emoji-btn, .chat-bubble,
-        .chat-clip-btn, .chat-send-btn, #tile_local_camera, .theme-switch, .theme-switch button) {
+        .chat-clip-btn, .chat-send-btn, #tile_local_camera, .theme-switch, .theme-switch button,
+        .share-dialog, .share-link-row input) {
         corner-shape: squircle;
     }
 }
@@ -548,8 +549,26 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 [data-theme="prism"] .theme-switch button { border-radius: var(--r-pill); color: var(--text-2); }
 [data-theme="prism"] .theme-switch button[aria-checked="true"] { color: var(--ink); background: var(--light); }
 
+/* --------------------------------------------------------------------------
+   Invite dialog
+   -------------------------------------------------------------------------- */
+[data-theme="prism"] .share-dialog {
+    background: var(--glass-float);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid rgb(255 255 255 / .16);
+    border-radius: var(--r-xl);
+    box-shadow: var(--elev-hero), var(--highlight);
+}
+[data-theme="prism"] .share-head h2 { color: var(--text-1); }
+[data-theme="prism"] .share-status { color: var(--text-2); }
+[data-theme="prism"] .share-link-row input { border-radius: var(--r-m); }
+[data-theme="prism"] .share-qr-code { border-radius: var(--r-m); }
+[data-theme="prism"] .chat-close-btn.share-close { border-radius: var(--r-pill); }
+[data-theme="prism"] body.audience-mode #btnAudienceQr { color: var(--ink); background: var(--light); }
+
 @media (prefers-reduced-transparency: reduce) {
-    [data-theme="prism"] :is(.setup-box, #camMenu, #reactionMenu, #micMenu, #soundMenu, .toast) {
+    [data-theme="prism"] :is(.setup-box, #camMenu, #reactionMenu, #micMenu, #soundMenu, .toast, .share-dialog) {
         -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface-1);
     }
 }
