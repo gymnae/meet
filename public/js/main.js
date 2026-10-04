@@ -71,6 +71,15 @@ window.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// Changing only the #part of the address does not reload the page, so a tab opened from an
+// audience link would stay listen-only when someone pastes a room link into it (and the other
+// way round). Start fresh for any invite the app did not set itself.
+window.addEventListener('hashchange', () => {
+    const inSession = document.body.classList.contains('in-session');
+    if (inSession && !AppState.audienceMode && window.location.hash === `#${encodeURIComponent(AppState.roomName)}`) return;
+    location.reload();
+});
+
 // Audience link: listen-only join. The room name is never shown, and no name is asked for
 // because listeners are hidden from the room.
 function enterAudienceGate(audienceId) {
