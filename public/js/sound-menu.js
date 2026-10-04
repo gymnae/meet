@@ -90,9 +90,7 @@ function renderSoundMenu(menu) {
         if (PROCESSING_TOGGLES.some(({ key }) => before[key] !== after[key])) await applyProcessingChange(menu);
     };
 
-    // Listeners have no microphone.
-    if (AppState.audienceMode) menu.append(hear, reset);
-    else menu.append(hear, mic, reset);
+    menu.append(hear, mic, reset);
 }
 
 function section(title) {

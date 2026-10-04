@@ -10,7 +10,7 @@ The browser client is built with vanilla JavaScript and CSS; a small Node.js ser
 
 - Instant rooms via shareable links, with optional password protection
 - Invite dialog with copyable links and QR codes; a protected room's link carries its password
-- Audience links for talks: a listen-only view behind a link that hides the room name and needs no password. Listeners have no mic, camera, chat or sharing, stay invisible to the room, and can pass the link on by QR code
+- Audience links for talks: a listen-only view behind a link that hides the room name and needs no password. Listeners have no mic, camera, chat or sharing, stay invisible to the room, and can pass the link on by QR code. On phones the listener view keeps the screen awake, shows lock-screen controls and reconnects by itself
 - Video and audio calls powered by LiveKit, including device selection and graceful audio-only/listen-only fallbacks
 - Responsive participant grids, screen-sharing layouts, resizable picture-in-picture, and fullscreen mode
 - Screen sharing and local browser recording

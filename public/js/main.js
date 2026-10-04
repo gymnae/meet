@@ -10,9 +10,10 @@ import {
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
 import {
     normalizeOutgoingMicTrack,
-    attachNormalizedRemoteAudio, detachNormalizedRemoteAudio, getMicConstraints, resumeAudioPlayback
+    attachNormalizedRemoteAudio, detachNormalizedRemoteAudio, getMicConstraints
 } from './audio-normalizer.js';
 import { openShareDialog, parseInviteHash } from './share.js';
+import { attachAudienceAudio, startAudienceSession } from './audience.js';
 import { toggleSoundMenu, refreshSoundMenu } from './sound-menu.js';
 import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
@@ -88,10 +89,6 @@ async function initiateCall() {
     const nickname = audience ? 'Listener' : document.getElementById('nameInput').value.trim();
     const passwordInputEl = document.getElementById('passwordInput');
     const password = audience ? '' : passwordInputEl.value.trim();
-
-    // Listeners publish nothing, so no camera/mic prompt unlocks audio for them.
-    // Start the audio engine inside this click while the browser still allows it.
-    if (audience) resumeAudioPlayback();
 
     if (!audience && (!roomName || !nickname)) {
         showGateError(!roomName ? 'Enter a room name using letters, numbers, - or _.' : 'Enter the name others will see.', !roomName ? 'roomInput' : 'nameInput');
@@ -284,7 +281,11 @@ async function initiateCall() {
             if (track.kind === LivekitClient.Track.Kind.Video) {
                 attachParticipantVideoTrack(track, participant, publication.source);
             } else if (track.kind === LivekitClient.Track.Kind.Audio) {
-                if (publication.source === LivekitClient.Track.Source.Microphone || publication.source === 'unknown') {
+                if (audience) {
+                    // Plain media element: phones keep it playing with the screen off,
+                    // which they do not do for Web Audio output.
+                    document.body.appendChild(attachAudienceAudio(track));
+                } else if (publication.source === LivekitClient.Track.Source.Microphone || publication.source === 'unknown') {
                     // Normalize remote microphone audio for consistent loudness
                     const element = attachNormalizedRemoteAudio(track, participant.identity);
                     document.body.appendChild(element);
@@ -368,6 +369,7 @@ async function initiateCall() {
                 ensureParticipantTile(participant, 'camera');
             });
             recalculateLayout();
+            startAudienceSession();
             return;
         }
         
@@ -451,12 +453,7 @@ const wakeAllVideos = () => {
 };
 window.addEventListener('touchstart', wakeAllVideos, { passive: true });
 window.addEventListener('click', wakeAllVideos, { passive: true });
-// Listeners: any tap releases audio the browser held back (see AudioPlaybackStatusChanged).
-window.addEventListener('pointerdown', () => {
-    if (!AppState.audienceMode || !AppState.activeRoom) return;
-    resumeAudioPlayback();
-    if (!AppState.activeRoom.canPlaybackAudio) AppState.activeRoom.startAudio().catch(() => {});
-}, { passive: true });
+
 // Resize fires many times per frame while dragging; lay out at most once per frame.
 let layoutFrame = 0;
 window.addEventListener('resize', () => {
