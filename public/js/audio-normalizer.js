@@ -153,6 +153,14 @@ function getSharedContext() {
     return sharedAudioContext;
 }
 
+/** Creates or resumes the shared audio context. Call from a user gesture so autoplay rules allow it. */
+export function resumeAudioPlayback() {
+    try {
+        const context = getSharedContext();
+        if (context.state === 'suspended') context.resume().catch(() => {});
+    } catch (e) { /* no Web Audio: remote audio falls back to plain elements */ }
+}
+
 function getMasterGain(context) {
     if (!masterGain) {
         masterGain = context.createGain();

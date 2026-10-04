@@ -1,6 +1,6 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
 import { showToast, setDockLabel, initThemeSwitch } from './ui.js';
-import { copyShareLink, toggleFullscreen, recalculateLayout, updateSpeakerHighlight, applyDynamicMirrorEffect } from './ui.js';
+import { toggleFullscreen, recalculateLayout, updateSpeakerHighlight, applyDynamicMirrorEffect } from './ui.js';
 import { 
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
     toggleScreenShare, cleanupTileTrack, cleanupAllTilesForParticipant, 
@@ -10,8 +10,9 @@ import {
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
 import {
     normalizeOutgoingMicTrack,
-    attachNormalizedRemoteAudio, detachNormalizedRemoteAudio, getMicConstraints
+    attachNormalizedRemoteAudio, detachNormalizedRemoteAudio, getMicConstraints, resumeAudioPlayback
 } from './audio-normalizer.js';
+import { openShareDialog, parseInviteHash } from './share.js';
 import { toggleSoundMenu, refreshSoundMenu } from './sound-menu.js';
 import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
@@ -27,7 +28,7 @@ window.toggleChat = toggleChat;
 window.toggleScreenShare = toggleScreenShare;
 window.toggleFullscreen = toggleFullscreen;
 window.terminateSession = terminateSession;
-window.copyShareLink = copyShareLink;
+window.openShareDialog = openShareDialog;
 window.handleChatSubmit = handleChatSubmit;
 window.handleFileUpload = handleFileUpload;
 window.toggleRecording = toggleRecording;
@@ -48,14 +49,18 @@ window.addEventListener('DOMContentLoaded', () => {
         catch(e) { return ''; }
     };
 
-    const currentHashRoom = window.location.hash.replace('#', '').trim();
+    const invite = parseInviteHash();
     const passwordInputEl = document.getElementById('passwordInput');
 
-    if (currentHashRoom) {
+    if (invite?.audienceId) {
+        enterAudienceGate(invite.audienceId);
+    } else if (invite?.room) {
         document.getElementById('passwordField').hidden = true;
-        const decodedRoom = decodeURIComponent(currentHashRoom);
-        document.getElementById('roomInput').value = decodedRoom;
-        passwordInputEl.value = getVaultPassword(decodedRoom.toLowerCase().replace(/[^a-z0-9-_]/g, ''));
+        document.getElementById('roomInput').value = invite.room;
+        // A password carried by the link wins over a remembered one.
+        passwordInputEl.value = invite.password || getVaultPassword(sanitizeRoom(invite.room));
+        // Keep the password out of the address bar, history and screenshots.
+        if (invite.password) history.replaceState(null, '', `#${encodeURIComponent(invite.room)}`);
     }
 
     document.getElementById('roomInput').addEventListener('input', (e) => {
@@ -65,13 +70,30 @@ window.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-async function initiateCall() {
-    const roomName = document.getElementById('roomInput').value.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
-    const nickname = document.getElementById('nameInput').value.trim();
-    const passwordInputEl = document.getElementById('passwordInput');
-    const password = passwordInputEl.value.trim();
+// Audience link: listen-only join. The room name is never shown, and no name is asked for
+// because listeners are hidden from the room.
+function enterAudienceGate(audienceId) {
+    AppState.audienceMode = true;
+    AppState.audienceId = audienceId;
+    document.body.classList.add('audience-mode');
+    ['roomField', 'nameField', 'passwordField'].forEach(id => { document.getElementById(id).hidden = true; });
+    document.getElementById('gateTitle').textContent = 'Listen in on a schnackn. stream';
+    document.getElementById('gateTagline').textContent = "You're invited to listen in. No mic, no camera.";
+    document.getElementById('joinBtn').innerText = 'Start listening';
+}
 
-    if (!roomName || !nickname) {
+async function initiateCall() {
+    const audience = AppState.audienceMode;
+    const roomName = audience ? '' : sanitizeRoom(document.getElementById('roomInput').value);
+    const nickname = audience ? 'Listener' : document.getElementById('nameInput').value.trim();
+    const passwordInputEl = document.getElementById('passwordInput');
+    const password = audience ? '' : passwordInputEl.value.trim();
+
+    // Listeners publish nothing, so no camera/mic prompt unlocks audio for them.
+    // Start the audio engine inside this click while the browser still allows it.
+    if (audience) resumeAudioPlayback();
+
+    if (!audience && (!roomName || !nickname)) {
         showGateError(!roomName ? 'Enter a room name using letters, numbers, - or _.' : 'Enter the name others will see.', !roomName ? 'roomInput' : 'nameInput');
         return;
     }
@@ -96,8 +118,14 @@ async function initiateCall() {
         const tokenRes = await fetch('/api/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ roomName, nickname, password, clientId })
+            body: JSON.stringify(audience ? { audienceId: AppState.audienceId, clientId } : { roomName, nickname, password, clientId })
         });
+        if (audience && tokenRes.status === 404) {
+            showGateError('This audience link is no longer valid. Ask the host for a new one.');
+            joinBtn.disabled = false;
+            joinBtn.innerText = 'Start listening';
+            return;
+        }
         if (!tokenRes.ok) {
             throw new Error('TOKEN_REQUEST_FAILED');
         }
@@ -137,16 +165,20 @@ async function initiateCall() {
             return;
         }
 
-        localStorage.setItem('portal_username', nickname);
-        if (password) {
-            try {
-                const vault = JSON.parse(localStorage.getItem('portal_vault') || '{}');
-                vault[roomName] = password;
-                localStorage.setItem('portal_vault', JSON.stringify(vault));
-            } catch (e) {}
+        if (!audience) {
+            localStorage.setItem('portal_username', nickname);
+            if (password) {
+                try {
+                    const vault = JSON.parse(localStorage.getItem('portal_vault') || '{}');
+                    vault[roomName] = password;
+                    localStorage.setItem('portal_vault', JSON.stringify(vault));
+                } catch (e) {}
+            }
+            window.location.hash = encodeURIComponent(roomName);
+            AppState.roomName = roomName;
+            // Only a protected room's password belongs in the links people share.
+            AppState.roomPassword = connectionInfo.protected ? password : '';
         }
-
-        window.location.hash = encodeURIComponent(roomName);
 
         document.body.classList.add('in-session');
         document.getElementById('loginSetup').style.display = 'none';
@@ -155,9 +187,10 @@ async function initiateCall() {
         document.getElementById('room-header').style.display = 'flex';
         document.getElementById('video-container').style.display = 'flex';
         document.getElementById('control-dock').style.display = 'flex';
-        document.getElementById('headerRoomLabel').innerText = roomName;
+        document.getElementById('headerRoomLabel').innerText = audience ? 'Audience' : roomName;
+        if (audience) document.querySelector('#room-header .channel-label').textContent = 'Listening';
 
-        joinBtn.innerText = "Opening camera…";
+        joinBtn.innerText = audience ? "Connecting…" : "Opening camera…";
 
         const audioConstraints = getMicConstraints();
 
@@ -182,12 +215,14 @@ async function initiateCall() {
             }
         });
 
-        const localTile = ensureParticipantTile(AppState.activeRoom.localParticipant, 'camera');
+        const localTile = audience ? null : ensureParticipantTile(AppState.activeRoom.localParticipant, 'camera');
         
-        let audioEnabled = true;
-        let videoEnabled = true;
+        let audioEnabled = !audience;
+        let videoEnabled = !audience;
 
-        try {
+        if (audience) {
+            AppState.preWarmedTracks = [];
+        } else try {
             AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ 
                 audio: audioConstraints, 
                 video: initialVideoProfile 
@@ -214,12 +249,12 @@ async function initiateCall() {
             }
         }
 
-        if (!audioEnabled) {
+        if (!audioEnabled && !audience) {
             AppState.micMuted = true;
             const micBtn = document.getElementById('btnMic');
             if (micBtn) { setDockLabel(micBtn, "Unmute"); micBtn.classList.add('active-off'); }
         }
-        if (!videoEnabled) {
+        if (!videoEnabled && !audience) {
             AppState.camMuted = true;
             const camBtn = document.getElementById('btnCam');
             if (camBtn) { setDockLabel(camBtn, "Start"); camBtn.classList.add('active-off'); }
@@ -300,6 +335,13 @@ async function initiateCall() {
             evaluateAndNegotiateCodec();
         });
 
+        // Without a mic prompt the browser may still hold back playback; the next tap releases it.
+        AppState.activeRoom.on(LivekitClient.RoomEvent.AudioPlaybackStatusChanged, () => {
+            if (AppState.activeRoom && !AppState.activeRoom.canPlaybackAudio) {
+                showToast('Tap anywhere to turn on sound.', 'warn', 6000);
+            }
+        });
+
         AppState.activeRoom.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
             const nextSpeaker = speakers.length > 0 ? speakers[0].identity : null;
             if (nextSpeaker === AppState.activeSpeakerIdentity) return;
@@ -320,6 +362,14 @@ async function initiateCall() {
             clearTimeout(connectTimer);
         }
         joinStage = 'session';
+
+        if (audience) {
+            AppState.activeRoom.remoteParticipants.forEach(participant => {
+                ensureParticipantTile(participant, 'camera');
+            });
+            recalculateLayout();
+            return;
+        }
         
         AppState.participantPreferences.set(AppState.activeRoom.localParticipant.identity, AppState.localPreferredCodec);
 
@@ -363,7 +413,10 @@ async function initiateCall() {
         terminateSession(false);
         restoreJoinGate();
 
-        if (joinStage === 'token') {
+        if (audience && joinStage === 'token') {
+            showGateError('Could not start listening. Check your connection and try again.');
+            document.getElementById('joinBtn').innerText = 'Start listening';
+        } else if (joinStage === 'token') {
             showGateError('Could not get permission to join. Check the room details and server availability, then try again.');
         } else if (joinStage === 'connect') {
             showGateError('Could not reach the meeting service. Secure WebSocket (WSS) traffic may be blocked by your network, firewall, or proxy. Check your connection or ask your network administrator, then try again.');
@@ -385,7 +438,7 @@ function restoreJoinGate() {
 
     const joinBtn = document.getElementById('joinBtn');
     joinBtn.disabled = false;
-    joinBtn.innerText = 'Connect';
+    joinBtn.innerText = AppState.audienceMode ? 'Start listening' : 'Connect';
 }
 
 const wakeAllVideos = () => {
@@ -398,6 +451,12 @@ const wakeAllVideos = () => {
 };
 window.addEventListener('touchstart', wakeAllVideos, { passive: true });
 window.addEventListener('click', wakeAllVideos, { passive: true });
+// Listeners: any tap releases audio the browser held back (see AudioPlaybackStatusChanged).
+window.addEventListener('pointerdown', () => {
+    if (!AppState.audienceMode || !AppState.activeRoom) return;
+    resumeAudioPlayback();
+    if (!AppState.activeRoom.canPlaybackAudio) AppState.activeRoom.startAudio().catch(() => {});
+}, { passive: true });
 // Resize fires many times per frame while dragging; lay out at most once per frame.
 let layoutFrame = 0;
 window.addEventListener('resize', () => {
@@ -438,7 +497,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initThemeSwitch();
     // The Prism join screen "lights up" once the form can be submitted.
     const updateReady = () => {
-        const ready = !!sanitizeRoom(document.getElementById('roomInput')?.value || '') &&
+        const ready = AppState.audienceMode || !!sanitizeRoom(document.getElementById('roomInput')?.value || '') &&
                       !!(document.getElementById('nameInput')?.value || '').trim();
         document.body.classList.toggle('gate-ready', ready);
     };
@@ -453,6 +512,8 @@ const MENU_IDS = ['camMenu', 'micMenu', 'reactionMenu', 'soundMenu'];
 function closeMenus() { MENU_IDS.forEach(id => { const m = document.getElementById(id); if (m) m.style.display = 'none'; }); }
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    // An open dialog handles Escape itself.
+    if (document.querySelector('dialog[open]')) return;
     const anyOpen = MENU_IDS.some(id => document.getElementById(id)?.style.display === 'flex');
     if (anyOpen) { closeMenus(); return; }
     if (document.body.classList.contains('chat-open')) toggleChat();

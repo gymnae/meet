@@ -80,6 +80,13 @@ db.exec(`
     );
 `);
 
+// Audience links point at a room through a random id, so the room name never appears in them.
+// Added after release: migrate databases created without the column.
+if (!db.prepare('PRAGMA table_info(rooms)').all().some(c => c.name === 'audience_id')) {
+    db.exec('ALTER TABLE rooms ADD COLUMN audience_id TEXT');
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS rooms_audience_id ON rooms (audience_id)');
+
 // Multer 200MB file limit
 const upload = multer({
     dest: uploadDir,
@@ -103,15 +110,53 @@ function hashPassword(pass) {
     return crypto.createHash('sha256').update(pass).digest('hex');
 }
 
+function cleanRoomName(name) {
+    return String(name || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+}
+
+// Audience members join hidden and listen-only: they cannot publish media or data,
+// and the people in the room do not see them as participants.
+async function issueAudienceToken(audienceId, clientId, res) {
+    const room = db.prepare('SELECT name FROM rooms WHERE audience_id = ?').get(String(audienceId));
+    if (!room) {
+        return res.status(404).json({ error: 'AUDIENCE_LINK_INVALID' });
+    }
+    db.prepare('UPDATE rooms SET updated_at = ? WHERE name = ?').run(Date.now(), room.name);
+
+    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+        identity: `listener_${crypto.randomBytes(6).toString('hex')}`,
+        name: 'Listener'
+    });
+    at.addGrant({
+        roomJoin: true,
+        room: room.name,
+        canPublish: false,
+        canPublishData: false,
+        canSubscribe: true,
+        hidden: true
+    });
+
+    if (clientId) {
+        db.prepare('INSERT OR IGNORE INTO users_alltime (identity, name, room_name, created_at) VALUES (?, ?, ?, ?)').run(
+            `cid:${clientId}`, 'Listener', room.name, Date.now()
+        );
+    }
+
+    res.json({ token: await at.toJwt(), serverUrl: LIVEKIT_URL, audience: true });
+}
+
 // Token & room gateway
 app.post('/api/token', async (req, res) => {
     try {
-        const { roomName, nickname, password, clientId } = req.body;
+        const { roomName, nickname, password, clientId, audienceId } = req.body;
+        if (audienceId) {
+            return await issueAudienceToken(audienceId, clientId, res);
+        }
         if (!roomName || !nickname) {
             return res.status(400).json({ error: 'Room name and nickname required' });
         }
 
-        const cleanRoom = roomName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+        const cleanRoom = cleanRoomName(roomName);
         const now = Date.now();
 
         const existingRoom = db.prepare('SELECT * FROM rooms WHERE name = ?').get(cleanRoom);
@@ -169,11 +214,33 @@ app.post('/api/token', async (req, res) => {
             now
         );
 
-        res.json({ token: jwtToken, serverUrl: LIVEKIT_URL });
+        // Tells the client whether a password belongs in the links it shares.
+        const isProtected = !!(existingRoom ? existingRoom.password_hash : password);
+        res.json({ token: jwtToken, serverUrl: LIVEKIT_URL, protected: isProtected });
     } catch (err) {
         console.error('[Token Generation Error]', err);
         res.status(500).json({ error: 'Failed to generate connection token' });
     }
+});
+
+// Audience link: returns the room's audience id, creating it on first use.
+// Same check as joining, so only people who may enter the room can hand out listen-only access.
+app.post('/api/rooms/:roomName/audience-link', (req, res) => {
+    const roomName = cleanRoomName(req.params.roomName);
+    const room = db.prepare('SELECT * FROM rooms WHERE name = ?').get(roomName);
+    if (!room) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+    if (room.password_hash && hashPassword(String(req.body?.password || '')) !== room.password_hash) {
+        return res.status(401).json({ error: 'Incorrect Password' });
+    }
+
+    let audienceId = room.audience_id;
+    if (!audienceId) {
+        audienceId = crypto.randomBytes(12).toString('base64url');
+        db.prepare('UPDATE rooms SET audience_id = ? WHERE name = ?').run(audienceId, roomName);
+    }
+    res.json({ audienceId });
 });
 
 // Ephemeral room sync (chat messages <60s, files <10m)

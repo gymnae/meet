@@ -93,7 +93,8 @@ export function attachParticipantVideoTrack(track, participant, streamSource) {
 }
 
 export function sendDataPacket(payload) {
-    if (!AppState.activeRoom) return;
+    // Listeners have no permission to publish data.
+    if (!AppState.activeRoom || AppState.audienceMode) return;
     const encoder = new TextEncoder();
     const data = encoder.encode(JSON.stringify(payload));
     AppState.activeRoom.localParticipant.publishData(data, LivekitClient.DataPacket_Kind.RELIABLE);
@@ -110,6 +111,7 @@ export function broadcastCodecPreference() {
 
 let negotiationDebounceTimer = null;
 export function evaluateAndNegotiateCodec() {
+    if (AppState.audienceMode) return;
     clearTimeout(negotiationDebounceTimer);
     negotiationDebounceTimer = setTimeout(async () => {
         let h264Count = 0;
@@ -243,7 +245,7 @@ export function toggleReactionMenu() {
 }
 
 export function checkMassMuteRules() {
-    if (!AppState.activeRoom || !AppState.activeRoom.localParticipant) return;
+    if (!AppState.activeRoom || !AppState.activeRoom.localParticipant || AppState.audienceMode) return;
     
     const totalParticipants = AppState.activeRoom.remoteParticipants.size + 1; 
     
