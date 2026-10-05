@@ -282,9 +282,11 @@ export function getActiveMicDeviceId() {
 export async function republishMic(deviceId) {
     const audioPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
     if (audioPub && audioPub.audioTrack) {
-        const oldMediaTrack = audioPub.audioTrack.mediaStreamTrack;
-        await AppState.activeRoom.localParticipant.unpublishTrack(audioPub.audioTrack);
-        audioPub.audioTrack.stop();
+        // Keep our own reference: unpublishTrack clears audioPub.audioTrack
+        const oldTrack = audioPub.audioTrack;
+        const oldMediaTrack = oldTrack.mediaStreamTrack;
+        await AppState.activeRoom.localParticipant.unpublishTrack(oldTrack);
+        oldTrack.stop();
         releaseOutgoingForPublished(oldMediaTrack);
     }
     const newMicTrack = await LivekitClient.createLocalAudioTrack({ deviceId, ...getMicConstraints() });
@@ -466,8 +468,9 @@ export async function toggleCam() {
                 
                 const cameraPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
                 if (cameraPub && cameraPub.videoTrack) {
-                    await AppState.activeRoom.localParticipant.unpublishTrack(cameraPub.videoTrack);
-                    cameraPub.videoTrack.stop();
+                    const oldCamTrack = cameraPub.videoTrack;
+                    await AppState.activeRoom.localParticipant.unpublishTrack(oldCamTrack);
+                    oldCamTrack.stop();
                 }
                 AppState.preWarmedTracks = AppState.preWarmedTracks.filter(t => { if (t.kind === 'video') { t.stop(); return false; } return true; });
 
@@ -510,8 +513,9 @@ export async function toggleCam() {
                             }
                         } else {
                             if (cameraPub && cameraPub.videoTrack) {
-                                await AppState.activeRoom.localParticipant.unpublishTrack(cameraPub.videoTrack);
-                                cameraPub.videoTrack.stop();
+                                const oldCamTrack = cameraPub.videoTrack;
+                                await AppState.activeRoom.localParticipant.unpublishTrack(oldCamTrack);
+                                oldCamTrack.stop();
                             }
                             AppState.preWarmedTracks = AppState.preWarmedTracks.filter(t => { if (t.kind === 'video') { t.stop(); return false; } return true; });
                             await new Promise(resolve => setTimeout(resolve, 100));
