@@ -11,6 +11,9 @@
 // A noise gate sits in front of both paths. Without it the compressor's makeup
 // gain lifts a sensitive mic's hiss and key clicks into earshot, even though
 // they stay too quiet to count as speaking.
+//
+// Self-monitoring (opt-in) plays your own mic straight back to your speakers
+// from the same graph, so you hear yourself without a trip through the server.
 
 // Leveling presets. The compressor applies its own automatic makeup gain, so
 // `trim` pulls the result back: typical speech (-25..-18 dBFS in) comes out
@@ -32,6 +35,8 @@ const DEFAULT_SETTINGS = {
     noiseSuppression: true,
     echoCancellation: true,
     autoGainControl: true,
+    selfMonitor: false,           // hear your own mic (headphones only, or it howls)
+    monitorVolume: 1,             // how loud you hear yourself, 0..2
 };
 
 let settings = loadSettings();
@@ -40,7 +45,8 @@ const peerVolumes = new Map();    // participant identity -> 0..2 (this session 
 let sharedAudioContext = null;
 let gateModule = null;            // Promise: noise gate worklet loaded into sharedAudioContext
 let masterGain = null;            // incoming voices -> masterGain -> speakers
-const outgoingProcs = new Map();  // original MediaStreamTrack -> { chain, micGain, processedTrack }
+const outgoingProcs = new Map();  // original MediaStreamTrack -> { chain, micGain, monitor, processedTrack }
+let monitorMuted = false;         // the mic is muted: nothing is sent, so nothing to hear
 const incomingProcs = new Map();  // remote MediaStreamTrack -> { chain, peerGain, element, identity }
 
 function loadSettings() {
@@ -78,6 +84,23 @@ export function setAudioSetting(key, value) {
     settings[key] = value;
     saveSettings();
     applyLiveSettings();
+    // Turning monitoring on is a click, so the context may resume now
+    if (key === 'selfMonitor' && value && sharedAudioContext?.state === 'suspended') {
+        sharedAudioContext.resume().catch(() => {});
+    }
+}
+
+/**
+ * Silences self-monitoring while the mic is muted. Muting only disables the
+ * published track; the raw mic keeps feeding the graph until it is republished.
+ */
+export function setMicMonitorMuted(muted) {
+    monitorMuted = muted;
+    applyLiveSettings();
+}
+
+function monitorLevel() {
+    return settings.selfMonitor && !monitorMuted ? settings.micGain * settings.monitorVolume : 0;
 }
 
 export function resetAudioSettings() {
@@ -136,6 +159,7 @@ function applyLiveSettings() {
         applyLeveling(proc.chain, settings.outgoingLeveling);
         applyGate(proc.chain, settings.outgoingGate);
         rampTo(proc.micGain.gain, settings.micGain);
+        rampTo(proc.monitor.gain, monitorLevel());
     });
 }
 
@@ -190,7 +214,9 @@ function releaseChain(chain) {
 
 function getSharedContext() {
     if (sharedAudioContext && sharedAudioContext.state !== 'closed') return sharedAudioContext;
-    sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    // 'interactive' asks for the smallest output buffer the device allows,
+    // which keeps self-monitoring as close to the voice as the browser can.
+    sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     masterGain = null;
     gateModule = null;
     if (sharedAudioContext.audioWorklet) {
@@ -226,8 +252,16 @@ export function normalizeOutgoingMicTrack(originalTrack) {
         micGain.connect(dest);
 
         const chain = createChain(context, new MediaStream([originalTrack]), micGain, settings.outgoingLeveling, settings.outgoingGate);
+
+        // Self-monitor: tapped before the compressor, whose look-ahead would
+        // add a delay, and played locally, bypassing the incoming volume.
+        // The gate and high-pass work sample by sample and add none.
+        const monitor = context.createGain();
+        monitor.gain.value = monitorLevel();
+        chain.gateOut.connect(monitor).connect(context.destination);
+
         const processedTrack = dest.stream.getAudioTracks()[0];
-        outgoingProcs.set(originalTrack, { chain, micGain, processedTrack });
+        outgoingProcs.set(originalTrack, { chain, micGain, monitor, processedTrack });
 
         console.log("[AudioNorm] Outgoing mic graph active.");
         return processedTrack;
@@ -244,6 +278,7 @@ export function teardownOutgoingNormalization(originalTrack) {
     try {
         releaseChain(proc.chain);
         proc.micGain.disconnect();
+        proc.monitor.disconnect();
         outgoingProcs.delete(originalTrack);
         console.log("[AudioNorm] Outgoing mic graph torn down.");
     } catch (e) { /* noop */ }
@@ -321,7 +356,7 @@ export function detachNormalizedRemoteAudio(track) {
 
 /** Tears down all normalization graphs (on disconnect). */
 export function teardownAllNormalization() {
-    outgoingProcs.forEach((proc) => { try { releaseChain(proc.chain); proc.micGain.disconnect(); } catch (e) {} });
+    outgoingProcs.forEach((proc) => { try { releaseChain(proc.chain); proc.micGain.disconnect(); proc.monitor.disconnect(); } catch (e) {} });
     outgoingProcs.clear();
     incomingProcs.forEach((proc) => {
         try { releaseChain(proc.chain); proc.peerGain.disconnect(); proc.element.remove(); } catch (e) {}
@@ -333,5 +368,6 @@ export function teardownAllNormalization() {
     sharedAudioContext = null;
     masterGain = null;
     gateModule = null;
+    monitorMuted = false;
     console.log("[AudioNorm] All normalization graphs released.");
 }

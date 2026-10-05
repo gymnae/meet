@@ -1,5 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
-import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints } from './audio-normalizer.js';
+import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints, setMicMonitorMuted } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
 
@@ -257,6 +257,7 @@ export function shouldJoinMuted() {
 /** Marks the local mic as muted in state and on the dock button. */
 export function markMicMuted() {
     AppState.micMuted = true;
+    setMicMonitorMuted(true);
     const btn = document.getElementById('btnMic');
     if (btn) {
         setDockLabel(btn, "Unmute");
@@ -295,6 +296,7 @@ export async function republishMic(deviceId) {
     await AppState.activeRoom.localParticipant.publishTrack(publishableTrack, {
         source: LivekitClient.Track.Source.Microphone
     });
+    setMicMonitorMuted(false);
 }
 
 export async function toggleMic() {
@@ -352,9 +354,7 @@ export async function toggleMic() {
             disableRow.onclick = async (e) => {
                 e.preventDefault(); e.stopPropagation();
                 micMenu.style.display = 'none';
-                AppState.micMuted = true;
-                setDockLabel(btn, "Unmute");
-                btn.classList.add('active-off');
+                markMicMuted();
                 try { await AppState.activeRoom.localParticipant.setMicrophoneEnabled(false); } catch(err) {}
             };
             micMenu.appendChild(disableRow);

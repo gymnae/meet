@@ -15,6 +15,7 @@ The browser client is built with vanilla JavaScript and CSS; a small Node.js ser
 - Responsive participant grids, screen-sharing layouts, resizable picture-in-picture, and fullscreen mode
 - Screen sharing and local browser recording
 - Reactions, raised hands, active-speaker feedback, and sound-processing controls
+- Opt-in self-monitoring ("Hear yourself" in the sound panel): your mic is played back locally, straight from the browser's audio graph, so there's no network delay. Meant for wired headphones
 - Ephemeral chat (1 minute) and file sharing up to 200 MB (10 minutes)
 - Pixel and Prism visual themes
 - Status page with active-room and usage statistics
