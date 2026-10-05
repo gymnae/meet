@@ -1233,7 +1233,8 @@ body.pseudo-fullscreen #micMenu { bottom: calc(76px + var(--safe-bottom)); }
 /* --- audience mode: listen-only view, reached by an audience link --- */
 .audience-only { display: none !important; }
 body.audience-mode .audience-only { display: flex !important; }
-body.audience-mode :is(#btnMic, #btnCam, #btnReact, #btnChat, #btnScreen, #btnRec, #chatDrawer, .rec-chip) { display: none !important; }
+/* No Sound panel either: listener audio skips the levelling graph so phones keep playing it with the screen off. */
+body.audience-mode :is(#btnMic, #btnCam, #btnReact, #btnChat, #btnScreen, #btnRec, #btnSound, #chatDrawer, .rec-chip) { display: none !important; }
 body.audience-mode #shareDialog .share-audience > summary { display: none; }
 body.audience-mode #btnAudienceQr { color: var(--ink); background: var(--role-info); }
 /* Nobody on stage yet: say so instead of showing an empty stage. */
