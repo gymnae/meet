@@ -1,6 +1,7 @@
 // sound-menu.js
 // In-call sound panel: leveling strength and volume for what you hear,
-// per-person volume, and leveling / level / browser processing for your mic.
+// per-person volume, and leveling / level / browser processing / self-monitoring
+// for your mic.
 import { AppState } from './state.js';
 import {
     getAudioSettings, setAudioSetting, resetAudioSettings,
@@ -79,6 +80,18 @@ function renderSoundMenu(menu) {
     );
     PROCESSING_TOGGLES.forEach(({ key, label }) => mic.append(toggle(key, label, s[key])));
 
+    // Self-monitoring: opt-in, since it howls through speakers
+    mic.append(liveToggle('Hear yourself', s.selfMonitor, v => {
+        setAudioSetting('selfMonitor', v);
+        renderSoundMenu(menu);
+    }));
+    if (s.selfMonitor) {
+        mic.append(
+            slider('Monitor level', s.monitorVolume, v => setAudioSetting('monitorVolume', v)),
+            hint('Use wired headphones. Speakers feed back, and Bluetooth adds a noticeable delay.')
+        );
+    }
+
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'cam-item sound-reset';
@@ -108,6 +121,13 @@ function section(title) {
 function subheading(text) {
     const el = document.createElement('p');
     el.className = 'sound-subheading';
+    el.textContent = text;
+    return el;
+}
+
+function hint(text) {
+    const el = document.createElement('p');
+    el.className = 'sound-hint';
     el.textContent = text;
     return el;
 }
