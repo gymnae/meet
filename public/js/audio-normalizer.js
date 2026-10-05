@@ -7,6 +7,10 @@
 //
 // Every graph has a wet (leveled) and a dry (raw) path, so leveling strength and
 // volumes change live without republishing or re-attaching anything.
+//
+// A noise gate sits in front of both paths. Without it the compressor's makeup
+// gain lifts a sensitive mic's hiss and key clicks into earshot, even though
+// they stay too quiet to count as speaking.
 
 // Leveling presets. The compressor applies its own automatic makeup gain, so
 // `trim` pulls the result back: typical speech (-25..-18 dBFS in) comes out
@@ -23,6 +27,8 @@ const DEFAULT_SETTINGS = {
     outgoingLeveling: 'off',      // your mic (listeners already level what they hear)
     volume: 1,                    // master volume for incoming voices, 0..2
     micGain: 1,                   // your mic level, 0..2
+    incomingGate: true,           // turn others down while they only send background noise
+    outgoingGate: true,           // same for your own mic, before it is sent
     noiseSuppression: true,
     echoCancellation: true,
     autoGainControl: true,
@@ -32,6 +38,7 @@ let settings = loadSettings();
 const peerVolumes = new Map();    // participant identity -> 0..2 (this session only)
 
 let sharedAudioContext = null;
+let gateModule = null;            // Promise: noise gate worklet loaded into sharedAudioContext
 let masterGain = null;            // incoming voices -> masterGain -> speakers
 const outgoingProcs = new Map();  // original MediaStreamTrack -> { chain, micGain, processedTrack }
 const incomingProcs = new Map();  // remote MediaStreamTrack -> { chain, peerGain, element, identity }
@@ -114,17 +121,30 @@ function applyLeveling(chain, presetName, immediate = false) {
     set(chain.dry.gain, preset ? 0 : 1);
 }
 
+function applyGate(chain, enabled) {
+    chain.gateEnabled = enabled;
+    if (chain.gate) chain.gate.parameters.get('enabled').value = enabled ? 1 : 0;
+}
+
 function applyLiveSettings() {
     if (masterGain) rampTo(masterGain.gain, settings.volume);
-    incomingProcs.forEach(proc => applyLeveling(proc.chain, settings.incomingLeveling));
+    incomingProcs.forEach(proc => {
+        applyLeveling(proc.chain, settings.incomingLeveling);
+        applyGate(proc.chain, settings.incomingGate);
+    });
     outgoingProcs.forEach(proc => {
         applyLeveling(proc.chain, settings.outgoingLeveling);
+        applyGate(proc.chain, settings.outgoingGate);
         rampTo(proc.micGain.gain, settings.micGain);
     });
 }
 
-/** source -> [highpass -> compressor -> trim -> wet] + [dry] -> output */
-function createChain(context, stream, output, presetName) {
+/**
+ * source -> highpass -> gate -> [compressor -> trim -> wet] + [dry] -> output
+ * The gate is a worklet that loads asynchronously; until it is ready the
+ * gate slot passes audio straight through.
+ */
+function createChain(context, stream, output, presetName, gateEnabled) {
     const source = context.createMediaStreamSource(stream);
 
     // High-pass: remove rumble/handling noise so the detector isn't fooled
@@ -133,23 +153,50 @@ function createChain(context, stream, output, presetName) {
     hp.frequency.value = 85;
     hp.Q.value = 0.7;
 
+    const gateIn = context.createGain();
+    const gateOut = context.createGain();
     const compressor = context.createDynamicsCompressor();
     const trim = context.createGain();
     const wet = context.createGain();
     const dry = context.createGain();
 
-    source.connect(hp).connect(compressor).connect(trim).connect(wet).connect(output);
-    source.connect(dry).connect(output);
+    source.connect(hp).connect(gateIn).connect(gateOut);
+    gateOut.connect(compressor).connect(trim).connect(wet).connect(output);
+    gateOut.connect(dry).connect(output);
 
-    const chain = { source, hp, compressor, trim, wet, dry };
+    const chain = { source, hp, gateIn, gateOut, gate: null, gateEnabled, compressor, trim, wet, dry, released: false };
     applyLeveling(chain, presetName, true);
+    insertGate(context, chain);
     return chain;
+}
+
+function insertGate(context, chain) {
+    if (!gateModule) return;
+    gateModule.then(() => {
+        if (chain.released || context.state === 'closed') return;
+        const gate = new AudioWorkletNode(context, 'noise-gate');
+        chain.gate = gate;
+        applyGate(chain, chain.gateEnabled);
+        chain.gateIn.disconnect(chain.gateOut);
+        chain.gateIn.connect(gate).connect(chain.gateOut);
+    }).catch(() => { /* keep the pass-through */ });
+}
+
+function releaseChain(chain) {
+    chain.released = true;
+    try { chain.source.disconnect(); } catch (e) { /* noop */ }
+    try { chain.gate?.disconnect(); } catch (e) { /* noop */ }
 }
 
 function getSharedContext() {
     if (sharedAudioContext && sharedAudioContext.state !== 'closed') return sharedAudioContext;
     sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)();
     masterGain = null;
+    gateModule = null;
+    if (sharedAudioContext.audioWorklet) {
+        gateModule = sharedAudioContext.audioWorklet.addModule('/js/noise-gate-worklet.js');
+        gateModule.catch(err => console.warn("[AudioNorm] Noise gate unavailable.", err));
+    }
     return sharedAudioContext;
 }
 
@@ -178,7 +225,7 @@ export function normalizeOutgoingMicTrack(originalTrack) {
         micGain.gain.value = settings.micGain;
         micGain.connect(dest);
 
-        const chain = createChain(context, new MediaStream([originalTrack]), micGain, settings.outgoingLeveling);
+        const chain = createChain(context, new MediaStream([originalTrack]), micGain, settings.outgoingLeveling, settings.outgoingGate);
         const processedTrack = dest.stream.getAudioTracks()[0];
         outgoingProcs.set(originalTrack, { chain, micGain, processedTrack });
 
@@ -195,7 +242,7 @@ export function teardownOutgoingNormalization(originalTrack) {
     const proc = outgoingProcs.get(originalTrack);
     if (!proc) return;
     try {
-        proc.chain.source.disconnect();
+        releaseChain(proc.chain);
         proc.micGain.disconnect();
         outgoingProcs.delete(originalTrack);
         console.log("[AudioNorm] Outgoing mic graph torn down.");
@@ -239,7 +286,7 @@ export function attachNormalizedRemoteAudio(track, identity) {
         const peerGain = context.createGain();
         peerGain.gain.value = getPeerVolume(identity);
         peerGain.connect(getMasterGain(context));
-        const chain = createChain(context, stream, peerGain, settings.incomingLeveling);
+        const chain = createChain(context, stream, peerGain, settings.incomingLeveling, settings.incomingGate);
 
         // Feed the Web Audio graph instead of the raw element output
         element.muted = true;
@@ -265,7 +312,7 @@ export function detachNormalizedRemoteAudio(track) {
         return;
     }
     try {
-        proc.chain.source.disconnect();
+        releaseChain(proc.chain);
         proc.peerGain.disconnect();
         proc.element.remove();
     } catch (e) { /* noop */ }
@@ -274,10 +321,10 @@ export function detachNormalizedRemoteAudio(track) {
 
 /** Tears down all normalization graphs (on disconnect). */
 export function teardownAllNormalization() {
-    outgoingProcs.forEach((proc) => { try { proc.chain.source.disconnect(); proc.micGain.disconnect(); } catch (e) {} });
+    outgoingProcs.forEach((proc) => { try { releaseChain(proc.chain); proc.micGain.disconnect(); } catch (e) {} });
     outgoingProcs.clear();
     incomingProcs.forEach((proc) => {
-        try { proc.chain.source.disconnect(); proc.peerGain.disconnect(); proc.element.remove(); } catch (e) {}
+        try { releaseChain(proc.chain); proc.peerGain.disconnect(); proc.element.remove(); } catch (e) {}
     });
     incomingProcs.clear();
     if (sharedAudioContext && sharedAudioContext.state !== 'closed') {
@@ -285,5 +332,6 @@ export function teardownAllNormalization() {
     }
     sharedAudioContext = null;
     masterGain = null;
+    gateModule = null;
     console.log("[AudioNorm] All normalization graphs released.");
 }

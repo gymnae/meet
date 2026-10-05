@@ -58,7 +58,8 @@ function renderSoundMenu(menu) {
     const hear = section('What you hear');
     hear.append(
         segmented('Leveling', LEVELING_CHOICES, s.incomingLeveling, v => setAudioSetting('incomingLeveling', v)),
-        slider('Volume', s.volume, v => setAudioSetting('volume', v))
+        slider('Volume', s.volume, v => setAudioSetting('volume', v)),
+        liveToggle('Hush background noise', s.incomingGate, v => setAudioSetting('incomingGate', v))
     );
     const peers = [...(AppState.activeRoom?.remoteParticipants.values() || [])];
     if (peers.length) {
@@ -73,7 +74,8 @@ function renderSoundMenu(menu) {
     const mic = section('Your microphone');
     mic.append(
         segmented('Leveling', LEVELING_CHOICES, s.outgoingLeveling, v => setAudioSetting('outgoingLeveling', v)),
-        slider('Mic level', s.micGain, v => setAudioSetting('micGain', v))
+        slider('Mic level', s.micGain, v => setAudioSetting('micGain', v)),
+        liveToggle('Hush background noise', s.outgoingGate, v => setAudioSetting('outgoingGate', v))
     );
     PROCESSING_TOGGLES.forEach(({ key, label }) => mic.append(toggle(key, label, s[key])));
 
@@ -161,6 +163,20 @@ function slider(label, value, onChange) {
         input.dispatchEvent(new Event('input'));
     });
     row.append(name, input, out);
+    return row;
+}
+
+// A checkbox whose setting applies live, without restarting the mic.
+function liveToggle(label, checked, onChange) {
+    const row = document.createElement('label');
+    row.className = 'sound-toggle';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = checked;
+    const text = document.createElement('span');
+    text.textContent = label;
+    input.addEventListener('change', () => onChange(input.checked));
+    row.append(input, text);
     return row;
 }
 

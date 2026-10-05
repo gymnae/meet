@@ -285,7 +285,7 @@ One at a time, bottom centre above the dock, `role="status"`. It uses a cyan bor
 | Instead of | Write |
 | --- | --- |
 | CONNECT SESSION | Connect |
-| Room reached >5 participants. Microphone auto-muted. | More than 5 people joined, so your microphone was muted. Unmute any time. |
+| Room has 4+ participants on join. Microphone auto-muted. | Several people are already here, so you joined with your microphone off. Unmute any time. |
 | ⚠️ Upload failed — downloading locally instead. | Upload failed, so the recording was downloaded to this device instead. |
 | Incorrect Password - Try Again (as placeholder) | That password is not right. Try again. (inline error) |
 
