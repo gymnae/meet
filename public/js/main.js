@@ -1,6 +1,6 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
 import { showToast, setDockLabel, initThemeSwitch } from './ui.js';
-import { toggleFullscreen, recalculateLayout, updateSpeakerHighlight } from './ui.js';
+import { toggleFullscreen, recalculateLayout, updateSpeakerHighlight, applyDynamicMirrorEffect } from './ui.js';
 import { 
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
     toggleScreenShare, cleanupTileTrack, cleanupAllTilesForParticipant, 
@@ -206,7 +206,7 @@ async function initiateCall() {
         document.getElementById('headerRoomLabel').innerText = audience ? 'Audience' : roomName;
         if (audience) document.querySelector('#room-header .channel-label').textContent = 'Listening';
 
-        joinBtn.innerText = audience ? "Connecting…" : "Opening microphone…";
+        joinBtn.innerText = audience ? "Connecting…" : "Opening camera…";
 
         const audioConstraints = getMicConstraints();
 
@@ -231,19 +231,38 @@ async function initiateCall() {
             }
         });
 
-        if (!audience) ensureParticipantTile(AppState.activeRoom.localParticipant, 'camera');
+        const localTile = audience ? null : ensureParticipantTile(AppState.activeRoom.localParticipant, 'camera');
         
         let audioEnabled = !audience;
+        let videoEnabled = !audience;
 
         if (audience) {
             AppState.preWarmedTracks = [];
         } else try {
-            AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ audio: audioConstraints });
-        } catch (audioErr) {
-            console.warn("[Hardware] No microphone available.", audioErr);
-            AppState.preWarmedTracks = [];
-            audioEnabled = false;
-            showToast("No microphone available, so you joined to listen only.", "warn", 5000);
+            AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ 
+                audio: audioConstraints, 
+                video: initialVideoProfile 
+            });
+        } catch (hwErr) {
+            console.warn("[Hardware] Failed both, trying audio-only...", hwErr);
+            try {
+                AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ audio: audioConstraints });
+                videoEnabled = false;
+                showToast("No camera available, so you joined with audio only.", "warn", 5000);
+            } catch (audioErr) {
+                console.warn("[Hardware] Failed audio-only, trying video-only...", audioErr);
+                try {
+                    AppState.preWarmedTracks = await LivekitClient.createLocalTracks({ video: initialVideoProfile });
+                    audioEnabled = false;
+                    showToast("No microphone available, so you joined with video only.", "warn", 5000);
+                } catch (videoErr) {
+                    console.warn("[Hardware] Complete hardware failure.", videoErr);
+                    AppState.preWarmedTracks = [];
+                    audioEnabled = false;
+                    videoEnabled = false;
+                    showToast("No camera or microphone available, so you joined to listen only.", "warn", 5000);
+                }
+            }
         }
 
         if (!audioEnabled && !audience) {
@@ -251,11 +270,29 @@ async function initiateCall() {
             const micBtn = document.getElementById('btnMic');
             if (micBtn) { setDockLabel(micBtn, "Unmute"); micBtn.classList.add('active-off'); }
         }
-        // The camera stays off on join; people start it from the camera menu.
-        if (!audience) {
+        if (!videoEnabled && !audience) {
             AppState.camMuted = true;
             const camBtn = document.getElementById('btnCam');
             if (camBtn) { setDockLabel(camBtn, "Start"); camBtn.classList.add('active-off'); }
+        }
+
+        const localVideoTrack = AppState.preWarmedTracks.find(t => t.kind === 'video');
+        if (localVideoTrack) {
+            let videoTag = document.createElement('video');
+            videoTag.playsInline = true;
+            videoTag.setAttribute('playsinline', 'true');
+            videoTag.setAttribute('webkit-playsinline', 'true');
+            videoTag.setAttribute('muted', '');
+            videoTag.muted = true;
+            videoTag.controls = false;
+            videoTag.style.position = 'relative';
+            videoTag.style.zIndex = '2';
+            localTile.insertBefore(videoTag, localTile.firstChild);
+
+            localVideoTrack.attach(videoTag);
+            videoTag.play().catch(() => {});
+            applyDynamicMirrorEffect(localVideoTrack);
+            if (localVideoTrack.mediaStreamTrack) AppState.currentCameraDeviceId = localVideoTrack.mediaStreamTrack.getSettings().deviceId;
         }
 
         // --- LiveKit Hooks ---
@@ -373,16 +410,26 @@ async function initiateCall() {
 
         broadcastCodecPreference();
 
-        // A busy room: join with the mic off instead of muting the people already talking.
-        // The mic is never published, so nothing leaks before the mute.
-        if (shouldJoinMuted() && AppState.preWarmedTracks.some(t => t.kind === 'audio')) {
-            AppState.preWarmedTracks = AppState.preWarmedTracks.filter(t => {
-                if (t.kind !== 'audio') return true;
-                t.stop();
-                return false;
-            });
-            markMicMuted();
-            showToast("Several people are already here, so you joined with your microphone off. Unmute any time.", "warn", 6000);
+        // A busy room: join with the mic and camera off instead of muting the people already
+        // talking. Neither is published, so nothing leaks before the mute.
+        if (shouldJoinMuted()) {
+            const hadMic = AppState.preWarmedTracks.some(t => t.kind === 'audio');
+            const hadCam = AppState.preWarmedTracks.some(t => t.kind === 'video');
+            AppState.preWarmedTracks.forEach(t => t.stop());
+            AppState.preWarmedTracks = [];
+            if (hadMic) markMicMuted();
+            if (hadCam) {
+                AppState.camMuted = true;
+                const camBtn = document.getElementById('btnCam');
+                if (camBtn) { setDockLabel(camBtn, "Start"); camBtn.classList.add('active-off'); }
+                const localTile = document.getElementById('tile_local_camera');
+                if (localTile) localTile.querySelectorAll('video').forEach(v => { v.srcObject = null; v.remove(); });
+            }
+            const offDevices = hadMic && hadCam ? "microphone and camera" : hadMic ? "microphone" : hadCam ? "camera" : null;
+            if (offDevices) {
+                const turnOn = hadMic && hadCam ? "Turn them on any time." : hadMic ? "Unmute any time." : "Start it any time.";
+                showToast(`Several people are already here, so you joined with your ${offDevices} off. ${turnOn}`, "warn", 6000);
+            }
         }
 
         for (const track of AppState.preWarmedTracks) {
