@@ -8,6 +8,7 @@ import compression from 'compression';
 import Database from 'better-sqlite3';
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,6 +105,15 @@ app.use(express.static(path.join(__dirname, 'public'), {
         res.setHeader('Cache-Control', 'no-cache');
     }
 }));
+
+// LiveKit's browser client, served from this origin instead of a public CDN: corporate
+// firewalls often block CDNs, and the version stays pinned by package.json.
+// ("require" resolves to the UMD build, which defines window.LivekitClient.)
+const livekitClientPath = createRequire(import.meta.url).resolve('livekit-client');
+app.get('/vendor/livekit-client.umd.js', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(livekitClientPath);
+});
 
 // Hash helper
 function hashPassword(pass) {
