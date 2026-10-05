@@ -14,6 +14,8 @@
 //
 // Self-monitoring (opt-in) plays your own mic straight back to your speakers
 // from the same graph, so you hear yourself without a trip through the server.
+// While it is on, the browser's echo cancellation stays off: it would take your
+// own voice coming out of the page for echo and chop it out of the mic.
 
 // Leveling presets. The compressor applies its own automatic makeup gain, so
 // `trim` pulls the result back: typical speech (-25..-18 dBFS in) comes out
@@ -72,7 +74,7 @@ export function getAudioSettings() {
 /** Browser-side mic processing constraints, for getUserMedia / createLocalAudioTrack. */
 export function getMicConstraints() {
     return {
-        echoCancellation: settings.echoCancellation,
+        echoCancellation: echoCancellationActive(),
         noiseSuppression: settings.noiseSuppression,
         autoGainControl: settings.autoGainControl,
     };
@@ -97,6 +99,11 @@ export function setAudioSetting(key, value) {
 export function setMicMonitorMuted(muted) {
     monitorMuted = muted;
     applyLiveSettings();
+}
+
+/** Echo cancellation as the mic is opened: never while you hear yourself. */
+export function echoCancellationActive() {
+    return settings.echoCancellation && !settings.selfMonitor;
 }
 
 function monitorLevel() {
@@ -253,12 +260,13 @@ export function normalizeOutgoingMicTrack(originalTrack) {
 
         const chain = createChain(context, new MediaStream([originalTrack]), micGain, settings.outgoingLeveling, settings.outgoingGate);
 
-        // Self-monitor: tapped before the compressor, whose look-ahead would
-        // add a delay, and played locally, bypassing the incoming volume.
-        // The gate and high-pass work sample by sample and add none.
+        // Self-monitor: tapped right after the high-pass, before the gate
+        // (it would clip the start of every word, which you notice at once
+        // in your own voice) and the compressor (its look-ahead adds delay).
+        // Played locally, bypassing the incoming volume.
         const monitor = context.createGain();
         monitor.gain.value = monitorLevel();
-        chain.gateOut.connect(monitor).connect(context.destination);
+        chain.hp.connect(monitor).connect(context.destination);
 
         const processedTrack = dest.stream.getAudioTracks()[0];
         outgoingProcs.set(originalTrack, { chain, micGain, monitor, processedTrack });
