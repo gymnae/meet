@@ -4,7 +4,7 @@ import { toggleFullscreen, recalculateLayout, updateSpeakerHighlight, applyDynam
 import { 
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
     toggleScreenShare, cleanupTileTrack, cleanupAllTilesForParticipant, 
-    terminateSession, handleIncomingDataPacket, checkMassMuteRules, ensureParticipantTile,
+    terminateSession, handleIncomingDataPacket, shouldJoinMuted, markMicMuted, ensureParticipantTile,
     broadcastCodecPreference, evaluateAndNegotiateCodec
 } from './livekit-handler.js';
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
@@ -343,7 +343,6 @@ async function initiateCall() {
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
             ensureParticipantTile(participant, 'camera');
-            checkMassMuteRules();
             broadcastCodecPreference();
             refreshSoundMenu();
         });
@@ -411,6 +410,18 @@ async function initiateCall() {
 
         broadcastCodecPreference();
 
+        // A busy room: join with the mic off instead of muting the people already talking.
+        // The mic is never published, so nothing leaks before the mute.
+        if (shouldJoinMuted() && AppState.preWarmedTracks.some(t => t.kind === 'audio')) {
+            AppState.preWarmedTracks = AppState.preWarmedTracks.filter(t => {
+                if (t.kind !== 'audio') return true;
+                t.stop();
+                return false;
+            });
+            markMicMuted();
+            showToast("Several people are already here, so you joined with your microphone off. Unmute any time.", "warn", 6000);
+        }
+
         for (const track of AppState.preWarmedTracks) {
             if (track.kind === 'video') {
                 await AppState.activeRoom.localParticipant.publishTrack(track, {
@@ -430,7 +441,6 @@ async function initiateCall() {
             }
         }
 
-        checkMassMuteRules();
         recalculateLayout();
 
         // Device access now granted — real device list available, re-evaluate

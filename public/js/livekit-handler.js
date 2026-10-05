@@ -244,26 +244,23 @@ export function toggleReactionMenu() {
     menu.style.display = 'flex';
 }
 
-export function checkMassMuteRules() {
-    if (!AppState.activeRoom || !AppState.activeRoom.localParticipant || AppState.audienceMode) return;
-    
-    const totalParticipants = AppState.activeRoom.remoteParticipants.size + 1; 
-    
-    if (totalParticipants > 5) {
-        if (AppState.activeRoom.localParticipant.isSpeaking) {
-            return;
-        }
+// From this room size on, people join with their mic off. Those already
+// talking keep their mic; only the newcomer is muted.
+export const AUTO_MUTE_ROOM_SIZE = 4;
 
-        if (!AppState.micMuted) {
-            AppState.micMuted = true;
-            const btn = document.getElementById('btnMic');
-            if (btn) {
-                setDockLabel(btn, "Unmute");
-                btn.classList.add('active-off');
-            }
-            AppState.activeRoom.localParticipant.setMicrophoneEnabled(false);
-            showToast("More than 5 people joined, so your microphone was muted. Unmute any time.", "warn", 5000);
-        }
+/** True when joining now would make the room big enough to join muted. */
+export function shouldJoinMuted() {
+    if (!AppState.activeRoom || AppState.audienceMode) return false;
+    return AppState.activeRoom.remoteParticipants.size + 1 >= AUTO_MUTE_ROOM_SIZE;
+}
+
+/** Marks the local mic as muted in state and on the dock button. */
+export function markMicMuted() {
+    AppState.micMuted = true;
+    const btn = document.getElementById('btnMic');
+    if (btn) {
+        setDockLabel(btn, "Unmute");
+        btn.classList.add('active-off');
     }
 }
 
