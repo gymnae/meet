@@ -727,6 +727,7 @@ body.gutter-dragging .video-tile { pointer-events: none; }
 }
 .sound-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--role-info); cursor: pointer; }
 .sound-toggle input:disabled, .sound-toggle input:disabled + span { opacity: .5; cursor: progress; }
+.sound-toggle input[data-locked], .sound-toggle input[data-locked] + span { cursor: default; }
 .sound-reset { justify-content: center; flex: none; }
 
 /* --------------------------------------------------------------------------
