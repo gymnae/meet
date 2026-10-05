@@ -4,6 +4,7 @@
 // the lock screen gets media controls, and the session recovers by itself after
 // the page was in the background or the connection dropped.
 import { AppState } from './state.js';
+import { postJson } from './api.js';
 import { showToast, recalculateLayout } from './ui.js';
 import { ensureParticipantTile } from './livekit-handler.js';
 
@@ -125,11 +126,7 @@ async function rejoin() {
     // Hidden pages get throttled timers anyway; try again when the page is visible.
     if (document.visibilityState !== 'visible') { scheduleRejoin(); return; }
     try {
-        const res = await fetch('/api/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audienceId: AppState.audienceId, clientId: localStorage.getItem('portal_client_id') })
-        });
+        const res = await postJson('/api/token', { audienceId: AppState.audienceId, clientId: localStorage.getItem('portal_client_id') });
         if (res.status === 404) {
             stopAudienceSession();
             showToast('This audience link is no longer valid. Ask the host for a new one.', 'error', 8000);

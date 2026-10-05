@@ -14,6 +14,7 @@ import {
 } from './audio-normalizer.js';
 import { openShareDialog, parseInviteHash } from './share.js';
 import { attachAudienceAudio, startAudienceSession } from './audience.js';
+import { postJson } from './api.js';
 import { toggleSoundMenu, refreshSoundMenu } from './sound-menu.js';
 import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
@@ -130,11 +131,7 @@ async function initiateCall() {
             localStorage.setItem('portal_client_id', clientId);
         }
 
-        const tokenRes = await fetch('/api/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(audience ? { audienceId: AppState.audienceId, clientId } : { roomName, nickname, password, clientId })
-        });
+        const tokenRes = await postJson('/api/token', audience ? { audienceId: AppState.audienceId, clientId } : { roomName, nickname, password, clientId });
         if (audience && tokenRes.status === 404) {
             showGateError('This audience link is no longer valid. Ask the host for a new one.');
             joinBtn.disabled = false;

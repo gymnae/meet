@@ -1,4 +1,5 @@
 import { AppState } from './state.js';
+import { postJson } from './api.js';
 import { sendDataPacket } from './livekit-handler.js';
 import { playSynthSound, recalculateLayout, showToast, hueIndexFor } from './ui.js';
 
@@ -149,11 +150,7 @@ export async function handleChatSubmit(e) {
     input.value = '';
 
     try {
-        const res = await fetch(`/api/rooms/${encodeURIComponent(roomName)}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sender, text })
-        });
+        const res = await postJson(`/api/rooms/${encodeURIComponent(roomName)}/chat`, { sender, text });
         const savedMsg = await res.json();
 
         renderMessage(savedMsg, true);
@@ -185,23 +182,14 @@ export function handleFileUpload(e) {
     const progressFill = document.getElementById('uploadProgressFill');
     if (progressContainer) progressContainer.style.display = 'block';
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/rooms/${encodeURIComponent(roomName)}/upload`, true);
-
-    xhr.upload.onprogress = (evt) => {
-        if (evt.lengthComputable && progressFill) {
-            const pct = Math.round((evt.loaded / evt.total) * 100);
-            progressFill.style.width = `${pct}%`;
-        }
-    };
-
-    xhr.onload = () => {
+    const uploadUrl = `/api/rooms/${encodeURIComponent(roomName)}/upload`;
+    const finish = (status, responseText) => {
         if (progressContainer) progressContainer.style.display = 'none';
         if (progressFill) progressFill.style.width = '0%';
         e.target.value = '';
 
-        if (xhr.status === 200) {
-            const savedFile = JSON.parse(xhr.responseText);
+        if (status === 200) {
+            const savedFile = JSON.parse(responseText);
             renderFile(savedFile, true);
             sendDataPacket({ type: 'FILE_SHARED', payload: savedFile });
             scrollChatToBottom();
@@ -210,9 +198,30 @@ export function handleFileUpload(e) {
         }
     };
 
-    xhr.onerror = () => {
-        if (progressContainer) progressContainer.style.display = 'none';
-        showToast('Network error during upload. Check your connection.', 'error');
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl, true);
+
+    xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable && progressFill) {
+            const pct = Math.round((evt.loaded / evt.total) * 100);
+            progressFill.style.width = `${pct}%`;
+        }
+    };
+
+    xhr.onload = () => finish(xhr.status, xhr.responseText);
+
+    // An upload progress listener makes the request need a CORS preflight once a corporate web
+    // gateway has bounced it through its own host (see api.js), and that preflight fails. Retry
+    // once as a plain fetch, which needs no preflight, at the cost of the progress bar.
+    xhr.onerror = async () => {
+        try {
+            const res = await fetch(uploadUrl, { method: 'POST', body: formData });
+            finish(res.status, await res.text());
+        } catch (err) {
+            if (progressContainer) progressContainer.style.display = 'none';
+            e.target.value = '';
+            showToast('Network error during upload. Check your connection.', 'error');
+        }
     };
 
     xhr.send(formData);

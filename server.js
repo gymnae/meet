@@ -95,7 +95,32 @@ const upload = multer({
 });
 
 app.use(compression());
-app.use(express.json());
+// The client sends JSON as text/plain to avoid CORS preflights (see public/js/api.js).
+app.use(express.json({ type: ['application/json', 'text/plain'] }));
+
+// Corporate web gateways can bounce API calls through their own host and back to this one. The
+// browser then treats the returning request as cross-origin, sending "Origin: null" (or this
+// site's origin), and only hands the response to the page if it is explicitly allowed. The API
+// uses no cookies or other ambient credentials, so allowing these origins exposes nothing that
+// a direct request could not already get.
+app.use('/api', (req, res, next) => {
+    const origin = req.headers.origin;
+    let allowed = origin === 'null';
+    if (origin && !allowed) {
+        try { allowed = new URL(origin).host === (req.headers['x-forwarded-host'] || req.headers.host); } catch (e) {}
+    }
+    if (allowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        if (req.method === 'OPTIONS') {
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            res.setHeader('Access-Control-Max-Age', '600');
+            return res.sendStatus(204);
+        }
+    }
+    next();
+});
 app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
     lastModified: true,
