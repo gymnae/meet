@@ -209,7 +209,7 @@ The pixel city lives in `pixel-bg.css` and has its own palette, since it is artw
 - Fields with visible labels: Room name, Your name, Password (optional). Placeholders are examples, never instructions.
 - Under the room field a live mono hint shows the channel that will actually be joined.
 - Errors appear in one inline region above the button with `role="alert"`. The field at fault gets `aria-invalid="true"`, a red border and focus.
-- The button reads Connect, then "Connecting…" and "Opening camera…" while busy, or "Join with password" when a password is needed.
+- The button reads Connect, then "Connecting…" and "Opening microphone…" while busy, or "Join with password" when a password is needed.
 - A radial scrim calms the art behind the form while the edges stay visible.
 
 ### 6.2 Header
