@@ -5,7 +5,7 @@
 import { AppState } from './state.js';
 import {
     getAudioSettings, setAudioSetting, resetAudioSettings,
-    getPeerVolume, setPeerVolume
+    getPeerVolume, setPeerVolume, echoCancellationActive
 } from './audio-normalizer.js';
 import { republishMic, getActiveMicDeviceId } from './livekit-handler.js';
 import { showToast } from './ui.js';
@@ -78,12 +78,19 @@ function renderSoundMenu(menu) {
         slider('Mic level', s.micGain, v => setAudioSetting('micGain', v)),
         liveToggle('Hush background noise', s.outgoingGate, v => setAudioSetting('outgoingGate', v))
     );
-    PROCESSING_TOGGLES.forEach(({ key, label }) => mic.append(toggle(key, label, s[key])));
+    PROCESSING_TOGGLES.forEach(({ key, label }) => {
+        // Echo cancellation is held off while you hear yourself
+        const locked = key === 'echoCancellation' && s.selfMonitor;
+        mic.append(toggle(key, locked ? `${label} (off while you hear yourself)` : label, locked ? false : s[key], locked));
+    });
 
     // Self-monitoring: opt-in, since it howls through speakers
-    mic.append(liveToggle('Hear yourself', s.selfMonitor, v => {
+    mic.append(liveToggle('Hear yourself', s.selfMonitor, async v => {
+        const echoBefore = echoCancellationActive();
         setAudioSetting('selfMonitor', v);
         renderSoundMenu(menu);
+        // Reopen a live mic so echo cancellation follows; a muted one picks it up on unmute
+        if (echoBefore !== echoCancellationActive() && !AppState.micMuted) await applyProcessingChange(menu);
     }));
     if (s.selfMonitor) {
         mic.append(
@@ -98,9 +105,9 @@ function renderSoundMenu(menu) {
     reset.textContent = 'Reset to defaults';
     reset.onclick = async (e) => {
         e.preventDefault(); e.stopPropagation();
-        const before = getAudioSettings();
+        const before = { ...getAudioSettings(), echoCancellation: echoCancellationActive() };
         resetAudioSettings();
-        const after = getAudioSettings();
+        const after = { ...getAudioSettings(), echoCancellation: echoCancellationActive() };
         renderSoundMenu(menu);
         if (PROCESSING_TOGGLES.some(({ key }) => before[key] !== after[key])) await applyProcessingChange(menu);
     };
@@ -200,13 +207,15 @@ function liveToggle(label, checked, onChange) {
     return row;
 }
 
-function toggle(key, label, checked) {
+function toggle(key, label, checked, locked = false) {
     const row = document.createElement('label');
     row.className = 'sound-toggle';
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = checked;
+    input.disabled = locked;
     input.dataset.processing = key;
+    if (locked) input.dataset.locked = '1';
     const text = document.createElement('span');
     text.textContent = label;
     input.addEventListener('change', async () => {
@@ -236,6 +245,6 @@ async function applyProcessingChange(menu) {
         showToast("Couldn't restart your microphone with the new setting.", 'error', 5000);
     } finally {
         republishing = false;
-        boxes.forEach(b => { b.disabled = false; });
+        boxes.forEach(b => { b.disabled = b.dataset.locked === '1'; });
     }
 }
