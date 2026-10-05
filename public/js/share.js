@@ -3,6 +3,7 @@
 // audience link that hides the room name and joins listen-only, and QR codes
 // for both. The QR encoder is loaded only when a code is first shown.
 import { AppState } from './state.js';
+import { postJson } from './api.js';
 
 const AUDIENCE_PREFIX = 'listen=';
 
@@ -170,11 +171,7 @@ async function prepareAudienceLink() {
     body.hidden = true;
     const loading = document.getElementById('shareAudienceLoading');
     loading.hidden = false;
-    audienceRequest = fetch(`/api/rooms/${encodeURIComponent(AppState.roomName)}/audience-link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: AppState.roomPassword })
-    });
+    audienceRequest = postJson(`/api/rooms/${encodeURIComponent(AppState.roomName)}/audience-link`, { password: AppState.roomPassword });
     try {
         const res = await audienceRequest;
         const data = await res.json().catch(() => ({}));
