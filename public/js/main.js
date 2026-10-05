@@ -19,7 +19,9 @@ import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
 import { initCapabilityChecks, refreshControlVisibility } from './capabilities.js';
 
-const INITIAL_CONNECT_TIMEOUT_MS = 15000;
+// Backstop only. LiveKit allows 15 s for the signalling WebSocket and another 15 s for the
+// media connection; behind corporate proxies the fallback to TURN over TLS can need most of that.
+const INITIAL_CONNECT_TIMEOUT_MS = 40000;
 
 window.initiateCall = initiateCall;
 window.toggleMic = toggleMic;
@@ -180,7 +182,8 @@ async function initiateCall() {
                     localStorage.setItem('portal_vault', JSON.stringify(vault));
                 } catch (e) {}
             }
-            window.location.hash = encodeURIComponent(roomName);
+            // replaceState fires no hashchange, so the reload-on-new-invite handler stays out of it.
+            history.replaceState(null, '', `#${encodeURIComponent(roomName)}`);
             AppState.roomName = roomName;
             // Only a protected room's password belongs in the links people share.
             AppState.roomPassword = connectionInfo.protected ? password : '';
@@ -360,6 +363,13 @@ async function initiateCall() {
         });
 
         joinStage = 'connect';
+        // Signalling up means the WebSocket got through; a failure after that is the media path.
+        let signalConnected = false;
+        AppState.activeRoom.once(LivekitClient.RoomEvent.SignalConnected, () => {
+            signalConnected = true;
+            joinBtn.innerText = audience ? 'Starting audio…' : 'Starting audio and video…';
+        });
+        joinBtn.innerText = 'Connecting to the meeting server…';
         let connectTimer;
         try {
             await Promise.race([
@@ -368,6 +378,10 @@ async function initiateCall() {
                     connectTimer = setTimeout(() => reject(new Error('INITIAL_CONNECT_TIMEOUT')), INITIAL_CONNECT_TIMEOUT_MS);
                 })
             ]);
+        } catch (connectErr) {
+            connectErr.signalConnected = signalConnected;
+            connectErr.serverUrl = connectionInfo.serverUrl;
+            throw connectErr;
         } finally {
             clearTimeout(connectTimer);
         }
@@ -420,7 +434,7 @@ async function initiateCall() {
     } catch (err) {
         // Do not log the SDK error object: authentication failures may include
         // connection details that should not be exposed in browser logs.
-        console.error(`[Join] ${joinStage} initialization failed (${err?.name || 'Error'})`);
+        console.error(`[Join] ${joinStage} initialization failed (${err?.name || 'Error'}${err?.reasonName ? ': ' + err.reasonName : ''}${joinStage === 'connect' ? (err?.signalConnected ? ', after signalling' : ', before signalling') : ''})`);
         terminateSession(false);
         restoreJoinGate();
 
@@ -430,11 +444,59 @@ async function initiateCall() {
         } else if (joinStage === 'token') {
             showGateError('Could not get permission to join. Check the room details and server availability, then try again.');
         } else if (joinStage === 'connect') {
-            showGateError('Could not reach the meeting service. Secure WebSocket (WSS) traffic may be blocked by your network, firewall, or proxy. Check your connection or ask your network administrator, then try again.');
+            showGateError(await describeConnectFailure(err));
         } else {
             showGateError('The meeting could not finish starting. Check your connection and try again.');
         }
     }
+}
+
+// Can the browser reach the meeting server with a plain HTTP(S) request? Tells a blocked host apart
+// from a network that lets HTTPS through but blocks WebSockets. LiveKit's own error reason cannot:
+// it reports a refused WebSocket upgrade as "ServerUnreachable" too.
+async function isHostReachable(wsUrl) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+        const httpUrl = wsUrl.replace(/^ws/, 'http');
+        await fetch(httpUrl, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
+        return true;  // any answer, even an error page, means the host is reachable
+    } catch (e) {
+        return false;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// Turns a failed Room.connect() into a message that says which part of the network path failed,
+// with the host so it can be passed to an IT department.
+async function describeConnectFailure(err) {
+    let host = 'the meeting server';
+    let insecure = false;
+    try {
+        const url = new URL(err.serverUrl);
+        host = url.host;
+        insecure = url.protocol === 'ws:' && window.location.protocol === 'https:';
+    } catch (e) {}
+    const reason = err?.reasonName;
+
+    if (insecure) {
+        return `This server is misconfigured: the meeting server (${host}) uses an unencrypted ws:// address, which browsers block on a secure page. Ask the site's administrator to set a wss:// address.`;
+    }
+    if (reason === 'NotAllowed') {
+        return 'The meeting server refused the connection. Try again; if it keeps happening, the server may be misconfigured.';
+    }
+    if (err?.signalConnected) {
+        // The WebSocket worked, so the server is reachable; audio and video could not get through,
+        // not even through the TURN relay.
+        return `Connected to the meeting server, but your network blocks the audio and video connection. This is common on corporate networks and VPNs. Try another network, or ask your IT team to allow WebRTC media and TURN to ${host}.`;
+    }
+    if (!err?.serverUrl || !(await isHostReachable(err.serverUrl))) {
+        return `Could not reach the meeting server (${host}). Your network or a firewall may block it, or you may be offline. Check your connection, try another network, or ask your IT team to allow ${host}.`;
+    }
+    // The host answered over HTTPS but the WebSocket failed, stalled or timed out:
+    // the typical footprint of a firewall or proxy that blocks WebSockets.
+    return `Your network seems to block the live connection to the meeting server (${host}). This usually means a corporate firewall or proxy blocks secure WebSocket (WSS) traffic. Try another network, or ask your IT team to allow WebSockets to ${host}.`;
 }
 
 function restoreJoinGate() {

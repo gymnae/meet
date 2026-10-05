@@ -29,6 +29,8 @@ The browser client is built with vanilla JavaScript and CSS; a small Node.js ser
 
 LiveKit's secure WebSocket (WSS) signaling connection is mandatory even when all media is relayed through TURN. TURN is a media-connectivity fallback and does not replace signaling. Corporate firewalls and proxies must therefore allow outbound WSS/HTTPS to the configured LiveKit host as well as the deployment's required WebRTC/TURN ports.
 
+For restrictive networks, serve LiveKit signalling as `wss://` on port 443 behind your reverse proxy, and enable TURN over TLS on port 443 (LiveKit's `turn.tls_port`). Clients built on MatrixRTC (Element Call) use the same LiveKit client and WebSocket signalling. If they work on a network where this app doesn't, compare their LiveKit URL with `LIVEKIT_URL` here. When joining fails, the join screen says which step failed: the server can't be reached at all, its WebSocket is blocked, or signalling worked but audio and video couldn't get through. It also names the host, so the message can go to an IT department as is.
+
 Configuration is provided through environment variables:
 
 ```env
