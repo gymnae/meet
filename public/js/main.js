@@ -107,6 +107,13 @@ async function initiateCall() {
     }
     showGateError('');
 
+    // The LiveKit library is a separate script; if it was blocked or failed to load, say that
+    // instead of failing later with a misleading error.
+    if (typeof window.LivekitClient === 'undefined') {
+        showGateError('The meeting software could not be loaded. Your network or a browser extension may be blocking it. Reload the page and try again; if that does not help, try another network.');
+        return;
+    }
+
     const joinBtn = document.getElementById('joinBtn');
     joinBtn.disabled = true;
     joinBtn.innerText = "Connecting…";
@@ -172,6 +179,9 @@ async function initiateCall() {
             joinBtn.innerText = "Connect";
             return;
         }
+
+        // Permission granted. Anything that fails from here until connecting is local setup.
+        joinStage = 'setup';
 
         if (!audience) {
             localStorage.setItem('portal_username', nickname);
@@ -443,6 +453,8 @@ async function initiateCall() {
             document.getElementById('joinBtn').innerText = 'Start listening';
         } else if (joinStage === 'token') {
             showGateError('Could not get permission to join. Check the room details and server availability, then try again.');
+        } else if (joinStage === 'setup') {
+            showGateError('The meeting could not be set up in this browser. Reload the page and try again.');
         } else if (joinStage === 'connect') {
             showGateError(await describeConnectFailure(err));
         } else {
