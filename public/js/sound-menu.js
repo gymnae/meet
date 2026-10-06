@@ -1,13 +1,13 @@
 // sound-menu.js
 // In-call sound panel: leveling strength and volume for what you hear,
-// per-person volume, and leveling / level / browser processing / self-monitoring
-// for your mic.
+// per-person volume, and which mic to use plus leveling / level / browser
+// processing / self-monitoring for it.
 import { AppState } from './state.js';
 import {
     getAudioSettings, setAudioSetting, resetAudioSettings,
-    getPeerVolume, setPeerVolume, echoCancellationActive
+    getPeerVolume, setPeerVolume, echoCancellationActive, getPreferredMicDeviceId
 } from './audio-normalizer.js';
-import { republishMic, getActiveMicDeviceId } from './livekit-handler.js';
+import { republishMic, getActiveMicDeviceId, selectMic } from './livekit-handler.js';
 import { showToast } from './ui.js';
 
 const LEVELING_CHOICES = [
@@ -27,7 +27,7 @@ let republishing = false;
 export function toggleSoundMenu() {
     if (!AppState.activeRoom) return;
     const menu = document.getElementById('soundMenu');
-    ['camMenu', 'micMenu', 'reactionMenu'].forEach(id => {
+    ['camMenu', 'reactionMenu'].forEach(id => {
         const m = document.getElementById(id);
         if (m) m.style.display = 'none';
     });
@@ -40,12 +40,23 @@ export function toggleSoundMenu() {
     menu.style.display = 'flex';
 }
 
+/** Opens the panel at the mic picker (right-click or long-press on the Mic button). */
+export function openMicPicker() {
+    if (!AppState.activeRoom) return;
+    const menu = document.getElementById('soundMenu');
+    if (menu.style.display !== 'flex') toggleSoundMenu();
+    const picker = menu.querySelector('select[data-mic-picker]');
+    picker?.scrollIntoView({ block: 'nearest' });
+    picker?.focus();
+}
+
 /** Re-renders the panel if it is open (e.g. someone joined or left). */
 export function refreshSoundMenu() {
     const menu = document.getElementById('soundMenu');
     if (!menu || menu.style.display !== 'flex') return;
-    // Don't yank a slider out from under an active drag
-    if (menu.contains(document.activeElement) && document.activeElement.type === 'range') return;
+    // Don't yank a slider or an open mic list out from under the user
+    const active = document.activeElement;
+    if (menu.contains(active) && (active.type === 'range' || active.tagName === 'SELECT')) return;
     const scroll = menu.scrollTop;
     renderSoundMenu(menu);
     menu.scrollTop = scroll;
@@ -74,6 +85,7 @@ function renderSoundMenu(menu) {
     // --- Your microphone ---
     const mic = section('Your microphone');
     mic.append(
+        micPicker(),
         segmented('Leveling', LEVELING_CHOICES, s.outgoingLeveling, v => setAudioSetting('outgoingLeveling', v)),
         slider('Mic level', s.micGain, v => setAudioSetting('micGain', v)),
         liveToggle('Hush background noise', s.outgoingGate, v => setAudioSetting('outgoingGate', v))
@@ -113,6 +125,52 @@ function renderSoundMenu(menu) {
     };
 
     menu.append(hear, mic, reset);
+}
+
+// Which mic to use. The list fills in once the browser reports the devices.
+function micPicker() {
+    const row = document.createElement('label');
+    row.className = 'sound-select';
+    const name = document.createElement('span');
+    name.className = 'sound-label';
+    name.textContent = 'Microphone';
+    const select = document.createElement('select');
+    select.dataset.micPicker = '1';
+    select.append(new Option('System default', ''));
+    select.addEventListener('change', async () => {
+        select.disabled = true;
+        try {
+            await selectMic(select.value);
+            if (AppState.micMuted) showToast('Saved. Used when you unmute.', 'info', 3000);
+        } catch (err) {
+            console.error("[Sound] Mic switch failed", err);
+            showToast("Couldn't switch to that microphone.", 'error', 5000);
+        } finally {
+            select.disabled = false;
+        }
+    });
+    row.append(name, select);
+    fillMicPicker(select);
+    return row;
+}
+
+async function fillMicPicker(select) {
+    let devices = [];
+    try {
+        devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
+    } catch (err) { return; }
+    // Without mic permission the browser hides the names; only the default is offered
+    if (devices.every(d => !d.label)) return;
+    // Chrome lists the system default (and on Windows the communications device)
+    // again under a pseudo id; name the default after it instead of listing it twice.
+    const systemDefault = devices.find(d => d.deviceId === 'default');
+    if (systemDefault) select.options[0].text = `System default (${systemDefault.label.replace(/^Default\s*-\s*/i, '')})`;
+    devices
+        .filter(d => d.deviceId !== 'default' && d.deviceId !== 'communications')
+        .forEach((d, i) => select.append(new Option(d.label || `Microphone ${i + 1}`, d.deviceId)));
+    const preferred = getPreferredMicDeviceId();
+    // A remembered mic that is unplugged falls back to the system default
+    select.value = [...select.options].some(o => o.value === preferred) ? preferred : '';
 }
 
 function section(title) {

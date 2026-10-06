@@ -101,7 +101,7 @@
 /* squircle corners where supported, plain radii elsewhere */
 @supports (corner-shape: squircle) {
     [data-theme="prism"] :is(.setup-box, .primary-btn, .secondary-btn, .share-btn, .dock-btn, .video-tile,
-        #camMenu, #reactionMenu, #micMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .name-tag,
+        #camMenu, #reactionMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .name-tag,
         .field input, #control-dock, .cam-item, .react-item, .react-emoji-btn, .chat-bubble,
         .chat-clip-btn, .chat-send-btn, #tile_local_camera, .theme-switch, .theme-switch button,
         .share-dialog, .share-link-row input) {
@@ -352,7 +352,7 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 /* --------------------------------------------------------------------------
    Floating glass: menus and toast (the only blurred surfaces in a call)
    -------------------------------------------------------------------------- */
-[data-theme="prism"] :is(#camMenu, #reactionMenu, #micMenu, #soundMenu) {
+[data-theme="prism"] :is(#camMenu, #reactionMenu, #soundMenu) {
     padding: var(--s-2);
     background: var(--glass-float);
     -webkit-backdrop-filter: var(--glass-blur);
@@ -361,7 +361,7 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
     border-radius: var(--r-l);
     box-shadow: var(--elev-2), var(--highlight);
 }
-[data-theme="prism"] :is(#camMenu, #reactionMenu, #micMenu, #soundMenu)::after { display: none; }
+[data-theme="prism"] :is(#camMenu, #reactionMenu, #soundMenu)::after { display: none; }
 [data-theme="prism"] :is(.cam-item, .react-item) {
     background: transparent;
     border: 1px solid transparent;
@@ -568,7 +568,7 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 [data-theme="prism"] body.audience-mode #btnAudienceQr { color: var(--ink); background: var(--light); }
 
 @media (prefers-reduced-transparency: reduce) {
-    [data-theme="prism"] :is(.setup-box, #camMenu, #reactionMenu, #micMenu, #soundMenu, .toast, .share-dialog) {
+    [data-theme="prism"] :is(.setup-box, #camMenu, #reactionMenu, #soundMenu, .toast, .share-dialog) {
         -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface-1);
     }
 }

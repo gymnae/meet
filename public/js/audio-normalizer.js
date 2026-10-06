@@ -71,9 +71,30 @@ export function getAudioSettings() {
     return { ...settings };
 }
 
-/** Browser-side mic processing constraints, for getUserMedia / createLocalAudioTrack. */
+// The mic picked in the sound panel. Kept apart from the settings so
+// "Reset to defaults" doesn't swap out your microphone. Unset = system default.
+const MIC_DEVICE_KEY = 'portal_mic_device';
+
+export function getPreferredMicDeviceId() {
+    try { return localStorage.getItem(MIC_DEVICE_KEY) || ''; } catch (e) { return ''; }
+}
+
+export function setPreferredMicDeviceId(deviceId) {
+    try {
+        if (deviceId) localStorage.setItem(MIC_DEVICE_KEY, deviceId);
+        else localStorage.removeItem(MIC_DEVICE_KEY);
+    } catch (e) { /* noop */ }
+}
+
+/**
+ * Browser-side mic constraints, for getUserMedia / createLocalAudioTrack: the
+ * picked mic and the processing settings. The mic is only preferred ("ideal"),
+ * so an unplugged one falls back to the system default instead of failing.
+ */
 export function getMicConstraints() {
+    const deviceId = getPreferredMicDeviceId();
     return {
+        ...(deviceId && { deviceId: { ideal: deviceId } }),
         echoCancellation: echoCancellationActive(),
         noiseSuppression: settings.noiseSuppression,
         autoGainControl: settings.autoGainControl,

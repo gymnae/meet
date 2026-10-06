@@ -47,7 +47,7 @@ export function openShareDialog() {
     bindDialog(dialog);
 
     // Opening from a dock menu: close those first
-    ['camMenu', 'micMenu', 'reactionMenu', 'soundMenu'].forEach(id => {
+    ['camMenu', 'reactionMenu', 'soundMenu'].forEach(id => {
         const m = document.getElementById(id);
         if (m) m.style.display = 'none';
     });
