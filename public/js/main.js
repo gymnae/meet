@@ -15,7 +15,7 @@ import {
 import { openShareDialog, parseInviteHash } from './share.js';
 import { attachAudienceAudio, startAudienceSession } from './audience.js';
 import { postJson } from './api.js';
-import { toggleSoundMenu, refreshSoundMenu } from './sound-menu.js';
+import { toggleSoundMenu, refreshSoundMenu, openMicPicker } from './sound-menu.js';
 import { initTileResize } from './resize.js';
 import { initRecorderButton, toggleRecording, isRecordingSupported } from './recorder.js';
 import { initCapabilityChecks, refreshControlVisibility } from './capabilities.js';
@@ -26,6 +26,7 @@ const INITIAL_CONNECT_TIMEOUT_MS = 40000;
 
 window.initiateCall = initiateCall;
 window.toggleMic = toggleMic;
+window.openMicPicker = openMicPicker;
 window.toggleCam = toggleCam;
 window.toggleReactionMenu = toggleReactionMenu;
 window.toggleChat = toggleChat;
@@ -604,8 +605,11 @@ window.addEventListener('DOMContentLoaded', () => {
     updateRoomHint();
 });
 
+// A mic plugged in or out shows up in the sound panel's mic list right away
+navigator.mediaDevices?.addEventListener?.('devicechange', refreshSoundMenu);
+
 // === MENUS & DRAWER: Escape and outside click close them ===
-const MENU_IDS = ['camMenu', 'micMenu', 'reactionMenu', 'soundMenu'];
+const MENU_IDS = ['camMenu', 'reactionMenu', 'soundMenu'];
 function closeMenus() { MENU_IDS.forEach(id => { const m = document.getElementById(id); if (m) m.style.display = 'none'; }); }
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
@@ -616,6 +620,6 @@ document.addEventListener('keydown', (e) => {
     if (document.body.classList.contains('chat-open')) toggleChat();
 });
 document.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#camMenu, #micMenu, #reactionMenu, #soundMenu, #btnMic, #btnCam, #btnReact, #btnSound')) return;
+    if (e.target.closest('#camMenu, #reactionMenu, #soundMenu, #btnMic, #btnCam, #btnReact, #btnSound')) return;
     closeMenus();
 });

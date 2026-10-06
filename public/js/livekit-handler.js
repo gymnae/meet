@@ -1,5 +1,5 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
-import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints, setMicMonitorMuted } from './audio-normalizer.js';
+import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints, setMicMonitorMuted, setPreferredMicDeviceId } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
 
@@ -200,9 +200,7 @@ export function handleIncomingDataPacket(payload, participant) {
 export function toggleReactionMenu() {
     const menu = document.getElementById('reactionMenu');
     const camMenu = document.getElementById('camMenu');
-    const micMenu = document.getElementById('micMenu');
     if (camMenu) camMenu.style.display = 'none';
-    if (micMenu) micMenu.style.display = 'none';
     hideSoundMenu();
 
     if (menu.style.display === 'flex') {
@@ -273,9 +271,10 @@ export function getActiveMicDeviceId() {
 }
 
 /**
- * (Re)publishes the microphone on the given device with the current browser
- * processing settings. Always republishes: switchActiveDevice / restartTrack
- * would restart the published track with a raw mic and bypass the graph.
+ * (Re)publishes the microphone with the current browser processing settings,
+ * on the given device or else the one picked in the sound panel. Always
+ * republishes: switchActiveDevice / restartTrack would restart the published
+ * track with a raw mic and bypass the graph.
  */
 export async function republishMic(deviceId) {
     const audioPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
@@ -287,7 +286,7 @@ export async function republishMic(deviceId) {
         oldTrack.stop();
         releaseOutgoingForPublished(oldMediaTrack);
     }
-    const newMicTrack = await LivekitClient.createLocalAudioTrack({ deviceId, ...getMicConstraints() });
+    const newMicTrack = await LivekitClient.createLocalAudioTrack({ ...getMicConstraints(), ...(deviceId && { deviceId }) });
     const normalizedMediaTrack = normalizeOutgoingMicTrack(newMicTrack.mediaStreamTrack);
     const publishableTrack = normalizedMediaTrack !== newMicTrack.mediaStreamTrack
         ? new LivekitClient.LocalAudioTrack(normalizedMediaTrack)
@@ -299,99 +298,63 @@ export async function republishMic(deviceId) {
     setMicMonitorMuted(false);
 }
 
+let micSwitching = false;
+
+/**
+ * Mutes a live mic, unmutes a muted one. Unmuting reopens the mic picked in
+ * the sound panel (the system default until one is picked), so nobody has to
+ * choose their mic again, and picks up processing changes made while muted.
+ */
 export async function toggleMic() {
-    if (!AppState.activeRoom) return;
-
-    let micMenu = document.getElementById('micMenu');
-    if (!micMenu) {
-        micMenu = document.createElement('div');
-        micMenu.id = 'micMenu';
-        document.getElementById('video-container').appendChild(micMenu);
-    }
-
-    const camMenu = document.getElementById('camMenu');
-    const reactMenu = document.getElementById('reactionMenu');
-    if (camMenu) camMenu.style.display = 'none';
-    if (reactMenu) reactMenu.style.display = 'none';
+    if (!AppState.activeRoom || micSwitching) return;
+    ['camMenu', 'reactionMenu'].forEach(id => {
+        const m = document.getElementById(id);
+        if (m) m.style.display = 'none';
+    });
     hideSoundMenu();
 
-    const btn = document.getElementById('btnMic');
-    
-    if (micMenu.style.display === 'flex') { micMenu.style.display = 'none'; return; }
-    
+    micSwitching = true;
     try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioDevices = devices.filter(d => d.kind === 'audioinput');
-        
-        const needsPermission = audioDevices.length === 0 || audioDevices.every(d => d.label === '');
-
-        micMenu.innerHTML = '';
-        
-        if (needsPermission) {
-            const requestRow = document.createElement('button');
-            requestRow.className = 'cam-item';
-            requestRow.innerText = "Allow microphone access";
-            requestRow.onclick = async (e) => {
-                e.preventDefault(); e.stopPropagation();
-                micMenu.style.display = 'none';
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: getMicConstraints()
-                    });
-                    stream.getTracks().forEach(t => t.stop());
-                    toggleMic();
-                } catch (err) {
-                    showToast("Microphone access is blocked. Allow it in your browser's site settings.", "error", 5000);
-                }
-            };
-            micMenu.appendChild(requestRow);
-        } else {
-            const disableRow = document.createElement('button');
-            disableRow.className = 'cam-item turn-off';
-            disableRow.innerText = "Mute microphone";
-            if (AppState.micMuted) disableRow.disabled = true;
-            
-            disableRow.onclick = async (e) => {
-                e.preventDefault(); e.stopPropagation();
-                micMenu.style.display = 'none';
-                markMicMuted();
-                try { await AppState.activeRoom.localParticipant.setMicrophoneEnabled(false); } catch(err) {}
-            };
-            micMenu.appendChild(disableRow);
-            
-            audioDevices.forEach((device, index) => {
-                const optionRow = document.createElement('button');
-                optionRow.className = 'cam-item';
-                const label = device.label || `Microphone ${index + 1}`;
-                optionRow.innerText = label;
-                
-                const audioPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
-                const isActive = !AppState.micMuted && audioPub && audioPub.audioTrack && getOutgoingSourceTrack(audioPub.audioTrack.mediaStreamTrack).getSettings().deviceId === device.deviceId;
-                
-                if (isActive) {
-                    optionRow.disabled = true;
-                    optionRow.innerText = `${label} (active)`;
-                }
-                
-                optionRow.onclick = async (e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    micMenu.style.display = 'none';
-                    
-                    try {
-                        await republishMic(device.deviceId);
-                        AppState.micMuted = false;
-                        setDockLabel(btn, "Mic");
-                        btn.classList.remove('active-off');
-                    } catch (err) {
-                        console.error("[Hardware] Mic switch failed", err);
-                    }
-                };
-                micMenu.appendChild(optionRow);
-            });
+        if (!AppState.micMuted) {
+            markMicMuted();
+            try { await AppState.activeRoom.localParticipant.setMicrophoneEnabled(false); } catch (err) {}
+            return;
         }
-        micMenu.style.display = 'flex';
-    } catch (err) { 
-        console.error("[Hardware] Mic enumerator failed:", err); 
+        await republishMic();
+        markMicLive();
+    } catch (err) {
+        console.error("[Hardware] Mic start failed", err);
+        showToast(err?.name === 'NotAllowedError'
+            ? "Microphone access is blocked. Allow it in your browser's site settings."
+            : "Couldn't turn on your microphone. Pick another one under Sound.", "error", 5000);
+    } finally {
+        micSwitching = false;
+    }
+}
+
+/**
+ * Remembers the mic picked in the sound panel ('' = system default) and
+ * switches a live mic over to it. A muted mic stays muted and uses it on unmute.
+ */
+export async function selectMic(deviceId) {
+    setPreferredMicDeviceId(deviceId);
+    if (!AppState.activeRoom || AppState.micMuted) return;
+    micSwitching = true;
+    try {
+        await republishMic();
+        markMicLive();
+    } finally {
+        micSwitching = false;
+    }
+}
+
+function markMicLive() {
+    AppState.micMuted = false;
+    setMicMonitorMuted(false);
+    const btn = document.getElementById('btnMic');
+    if (btn) {
+        setDockLabel(btn, "Mic");
+        btn.classList.remove('active-off');
     }
 }
 
@@ -399,9 +362,7 @@ export async function toggleCam() {
     if (!AppState.activeRoom) return;
     const menu = document.getElementById('camMenu');
     const reactMenu = document.getElementById('reactionMenu');
-    const micMenu = document.getElementById('micMenu');
     if (reactMenu) reactMenu.style.display = 'none';
-    if (micMenu) micMenu.style.display = 'none';
     hideSoundMenu();
     
     const btn = document.getElementById('btnCam');

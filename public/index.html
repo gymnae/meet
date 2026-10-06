@@ -223,7 +223,6 @@
         <div class="grid" id="videoGrid" aria-label="Participants"></div>
         <div id="camMenu" role="menu" aria-label="Camera options"></div>
         <div id="reactionMenu" role="menu" aria-label="Reactions"></div>
-        <div id="micMenu" role="menu" aria-label="Microphone options"></div>
         <div id="soundMenu" role="dialog" aria-label="Sound settings"></div>
 
         <!-- Ephemeral chat & files -->
@@ -254,7 +253,7 @@
 
     <!-- Controls dock -->
     <nav id="control-dock" aria-label="Call controls">
-        <button id="btnMic" class="dock-btn" type="button" onclick="toggleMic()" aria-label="Mic"><svg class="icon" aria-hidden="true"><use class="ic-pixel" href="#i-mic"/><use class="ic-smooth" href="#s-mic"/><use class="slash ic-pixel" href="#i-slash"/><use class="slash ic-smooth" href="#s-slash"/></svg><span class="dock-label">Mic</span></button>
+        <button id="btnMic" class="dock-btn" type="button" onclick="toggleMic()" oncontextmenu="event.preventDefault(); openMicPicker()" title="Mute or unmute. Right-click or long-press to pick a microphone." aria-label="Mic"><svg class="icon" aria-hidden="true"><use class="ic-pixel" href="#i-mic"/><use class="ic-smooth" href="#s-mic"/><use class="slash ic-pixel" href="#i-slash"/><use class="slash ic-smooth" href="#s-slash"/></svg><span class="dock-label">Mic</span></button>
         <button id="btnCam" class="dock-btn" type="button" onclick="toggleCam()" aria-label="Cam"><svg class="icon" aria-hidden="true"><use class="ic-pixel" href="#i-cam"/><use class="ic-smooth" href="#s-cam"/><use class="slash ic-pixel" href="#i-slash"/><use class="slash ic-smooth" href="#s-slash"/></svg><span class="dock-label">Cam</span></button>
         <button id="btnReact" class="dock-btn" type="button" onclick="toggleReactionMenu()" aria-label="React" aria-haspopup="menu"><svg class="icon" aria-hidden="true"><use class="ic-pixel" href="#i-react"/><use class="ic-smooth" href="#s-react"/></svg><span class="dock-label">React</span></button>
         <button id="btnChat" class="dock-btn" type="button" onclick="toggleChat()" aria-label="Chat" aria-controls="chatDrawer"><svg class="icon" aria-hidden="true"><use class="ic-pixel" href="#i-chat"/><use class="ic-smooth" href="#s-chat"/></svg><span class="dock-label">Chat</span><span id="chatBadge" class="chat-badge"></span></button>

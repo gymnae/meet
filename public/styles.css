@@ -144,7 +144,7 @@ a { color: var(--role-info); }
 /* Stepped pixel corners (progressive: square where unsupported) */
 @supports (corner-shape: notch) {
     .setup-box, .primary-btn, .secondary-btn, .share-btn, .dock-btn, .video-tile,
-    #camMenu, #reactionMenu, #micMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .share-dialog,
+    #camMenu, #reactionMenu, #soundMenu, .chat-drawer, .toast, .file-card, .file-dl-btn, .share-dialog,
     .avatar-placeholder, .name-tag, .field input {
         corner-shape: notch;
         border-radius: var(--notch);
@@ -611,7 +611,7 @@ body.gutter-dragging .video-tile { pointer-events: none; }
 /* --------------------------------------------------------------------------
    6. Menus (mic, camera, reactions)
    -------------------------------------------------------------------------- */
-#camMenu, #reactionMenu, #micMenu, #soundMenu {
+#camMenu, #reactionMenu, #soundMenu {
     display: none;
     position: absolute;
     bottom: calc(96px + var(--safe-bottom)); left: 50%;
@@ -729,6 +729,22 @@ body.gutter-dragging .video-tile { pointer-events: none; }
 .sound-toggle input:disabled, .sound-toggle input:disabled + span { opacity: .5; cursor: progress; }
 .sound-toggle input[data-locked], .sound-toggle input[data-locked] + span { cursor: default; }
 .sound-reset { justify-content: center; flex: none; }
+
+.sound-select { display: flex; flex-direction: column; gap: var(--s-1); }
+.sound-select select {
+    width: 100%;
+    min-height: 36px;
+    padding: 0 var(--s-2);
+    font: 600 var(--fs-small)/1 var(--font-ui);
+    color: var(--text-1);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 0;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+.sound-select select:focus-visible { outline: 2px solid var(--role-info); outline-offset: 1px; }
+.sound-select select:disabled { opacity: .5; cursor: progress; }
 
 /* --------------------------------------------------------------------------
    7. Badges & reactions
@@ -1100,8 +1116,7 @@ body.pseudo-fullscreen #tile_local_camera {
     right: calc(8px + var(--safe-right)) !important;
 }
 body.pseudo-fullscreen #camMenu,
-body.pseudo-fullscreen #reactionMenu,
-body.pseudo-fullscreen #micMenu { bottom: calc(76px + var(--safe-bottom)); }
+body.pseudo-fullscreen #reactionMenu { bottom: calc(76px + var(--safe-bottom)); }
 
 /* --- mobile keyboard fit ---------------------------------------------------
    `interactive-widget=resizes-content` is Chromium-only. On iOS the layout
@@ -1133,7 +1148,7 @@ body.pseudo-fullscreen #micMenu { bottom: calc(76px + var(--safe-bottom)); }
         bottom: calc(8px + var(--safe-bottom)) !important;
         right: calc(8px + var(--safe-right)) !important;
     }
-    #camMenu, #reactionMenu, #micMenu {
+    #camMenu, #reactionMenu {
         bottom: calc(56px + var(--safe-bottom));
         max-height: calc(100dvh - 120px - var(--safe-top) - var(--safe-bottom));
         overflow: auto;
