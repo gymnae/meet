@@ -8,8 +8,11 @@
 //    device over budget steps down to less frequent masks and a smaller camera picture.
 //    Nothing is turned off by itself: that would show the background the person chose to hide.
 // Everything is self-hosted (see server.js) and loaded only once an effect is picked.
+// People can add their own pictures. They stay in this browser (IndexedDB), filed under the name
+// they join with, and never go to the server; only the video they appear in does.
 
 import { showToast } from './ui.js';
+import { isIOS } from './state.js';
 
 const STORAGE_KEY = 'portal_background';
 const PROCESSOR_MODULE = '/vendor/track-processors.mjs';
@@ -17,39 +20,61 @@ const WASM_BASE = '/vendor/tasks-vision/wasm';
 // The landscape model reads a 256×144 picture, the square one 256×256.
 const MODEL_LANDSCAPE = '/models/selfie_segmenter_landscape.tflite';
 const MODEL_SQUARE = '/models/selfie_segmenter.tflite';
-const BLUR_RADIUS = 10;
+// LiveKit blurs a quarter-size copy of the frame and divides the radius by 4 for it; its kernel
+// stops at 16, so 60 (15 on the small copy) is about as strong as it gets, and still cheap.
+const BLUR_RADIUS = 60;
 
 // Main-thread time per frame the effect may use, averaged over a window. Two windows in a row
-// over budget step down one level.
+// over budget, or one clearly over (twice the budget, or under half the expected frame rate),
+// step down one level. The frame rate catches work done outside the transform, such as the
+// canvas copy and capture of the fallback path.
 const BUDGET_MS = 10;
 const WINDOW_MS = 2000;
+const MIN_FPS_SHARE = 0.75;
 const LOAD_LEVELS = [
     { segmentEvery: 2 },
     { segmentEvery: 3 },
     { segmentEvery: 3, height: 540 },
     { segmentEvery: 4, height: 360 }
 ];
+// Phones, and browsers without MediaStreamTrackProcessor (Safari, Firefox), copy every frame
+// through a canvas on the main thread. They start at the lowest level and at most 24 fps:
+// on an iPhone the full-size path froze the page.
+const CONSTRAINED_FPS = 24;
 
-// Art is drawn at 320×180 and scaled up without smoothing, so pixels stay crisp.
-const ART_W = 320;
-const ART_H = 180;
-const ART_SCALE = 4;
+// Pixel art is drawn at 320×180 and scaled up without smoothing, so pixels stay crisp.
+// Prism art is drawn smooth at full size.
+const PIXEL_CANVAS = { width: 320, height: 180, scale: 4, smooth: false };
+const PRISM_CANVAS = { width: 1280, height: 720, scale: 1, smooth: true };
 
 export const BACKGROUNDS = [
     { id: 'none', name: 'No effect', short: 'None' },
     { id: 'blur', name: 'Blur', short: 'Blur' },
-    { id: 'city', name: 'Night city', draw: drawCity },
-    { id: 'grid', name: 'Neon grid', draw: drawGrid },
-    { id: 'wall', name: 'Quiet wall', draw: drawWall }
+    { id: 'city', name: 'Night city', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawCity },
+    { id: 'grid', name: 'Neon grid', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawGrid },
+    { id: 'wall', name: 'Quiet wall', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawWall },
+    { id: 'prism-light', name: 'Prism light', theme: 'prism', canvas: PRISM_CANVAS, draw: drawPrismLight },
+    { id: 'prism-dusk', name: 'Dusk', theme: 'prism', canvas: PRISM_CANVAS, draw: drawPrismDusk },
+    { id: 'prism-studio', name: 'Studio', theme: 'prism', canvas: PRISM_CANVAS, draw: drawPrismStudio }
 ];
+
+// Own pictures: ids are "custom:<record id>"
+const CUSTOM_PREFIX = 'custom:';
+const MAX_CUSTOM = 8;
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_EDGE = 1920;
 
 export function getBackgroundChoice() {
     try {
         const id = localStorage.getItem(STORAGE_KEY);
-        return BACKGROUNDS.some(b => b.id === id) ? id : 'none';
+        return BACKGROUNDS.some(b => b.id === id) || id?.startsWith(CUSTOM_PREFIX) ? id : 'none';
     } catch (e) {
         return 'none';
     }
+}
+
+function currentTheme() {
+    return document.documentElement.dataset.theme === 'prism' ? 'prism' : 'pixel';
 }
 
 function storeBackgroundChoice(id) {
@@ -79,6 +104,12 @@ export function canProcessVideo() {
         processingSupported = true;
     } catch (e) {}
     return processingSupported;
+}
+
+function isConstrainedDevice() {
+    const fallbackPath = typeof MediaStreamTrackProcessor === 'undefined' || typeof MediaStreamTrackGenerator === 'undefined';
+    const phone = isIOS() || /Android|Mobi/i.test(navigator.userAgent);
+    return fallbackPath || phone;
 }
 
 /** The camera itself, also while a processor replaces what is sent. */
@@ -112,9 +143,12 @@ export function availableBackgrounds(track) {
         // A choice that no longer works here (no GPU now, other camera) keeps the camera off until
         // the person picks None, so that choice has to stay reachable.
         const chosen = getBackgroundChoice();
-        return chosen === 'none' ? [] : BACKGROUNDS.filter(b => b.id === 'none' || b.id === chosen);
+        if (chosen === 'none') return [];
+        return [BACKGROUNDS[0], BACKGROUNDS.find(b => b.id === chosen) || { id: chosen, name: 'Your picture', custom: true }];
     }
-    return BACKGROUNDS.filter(b => own || b.id === 'none' || b.id === 'blur');
+    // The set that matches the theme, plus a choice made under the other one so it stays visible
+    const chosen = getBackgroundChoice();
+    return BACKGROUNDS.filter(b => !b.theme || (own && (b.theme === currentTheme() || b.id === chosen)));
 }
 
 // --- applying the choice -------------------------------------------------------------------
@@ -141,15 +175,25 @@ function resumePreview(track) {
 
 async function applyNow(track, id) {
     if (!track || track.kind !== 'video' || sourceTrack(track)?.readyState === 'ended') return;
+    // An own picture that is gone (removed, or chosen under another name) falls back to blur, not to
+    // showing the background.
+    if (id.startsWith(CUSTOM_PREFIX) && !(await customImageUrl(id))) id = 'blur';
     const current = track.getProcessor();
     const needsProcessing = id !== 'none' && !(id === 'blur' && hasNativeBlur(sourceTrack(track)));
     if (needsProcessing && !current && !canProcessVideo()) throw new Error('Background effects are not supported on this device');
+
+    // The platform already blurs (iOS Portrait mode in Control Center reports itself this way):
+    // nothing for us to do, and nothing to slow the call down.
+    if (id === 'blur' && sourceTrack(track)?.getSettings?.().backgroundBlur === true) {
+        if (current) await stopProcessing(track);
+        return;
+    }
 
     if (id === 'none' || id === 'blur') {
         const native = await setNativeBlur(sourceTrack(track), id === 'blur').catch(() => false);
         if (native || id === 'none') {
             // Platform blur is on before our processor goes, so nothing unblurred is sent in between.
-            if (current) await track.stopProcessor();
+            if (current) await stopProcessing(track);
             return;
         }
     }
@@ -158,7 +202,7 @@ async function applyNow(track, id) {
     if (current?.switchTo) {
         await current.switchTo(options);
         // A camera switch restarts the processor on a fresh camera track, at full size
-        applyLoadLevel(current);
+        await applyLoadLevel(current.transformer, current.source);
     } else {
         await track.setProcessor(await createProcessor(track, options));
     }
@@ -166,9 +210,16 @@ async function applyNow(track, id) {
     if (id !== 'blur') await setNativeBlur(sourceTrack(track), false).catch(() => {});
 }
 
+async function stopProcessing(track) {
+    const camera = sourceTrack(track);
+    await track.stopProcessor();
+    await restoreCameraSize(camera);
+}
+
 async function effectOptions(id) {
     if (id === 'blur') return { mode: 'background-blur', blurRadius: BLUR_RADIUS };
-    return { mode: 'virtual-background', imagePath: await backgroundImageUrl(id) };
+    const imagePath = id.startsWith(CUSTOM_PREFIX) ? await customImageUrl(id) : await backgroundImageUrl(id);
+    return { mode: 'virtual-background', imagePath };
 }
 
 let processorModule;
@@ -192,8 +243,13 @@ async function createProcessor(track, options) {
             modelAssetPath: width >= height ? MODEL_LANDSCAPE : MODEL_SQUARE
         }
     });
-    const processor = new BackgroundProcessorWrapper(transformer, 'background-processor');
-    watchLoad(processor);
+    const constrained = isConstrainedDevice();
+    transformer.loadLevel = constrained ? LOAD_LEVELS.length - 1 : 0;
+    // Shrink the camera before the processor sizes its canvases from it
+    await applyLoadLevel(transformer, sourceTrack(track));
+    const maxFps = constrained ? CONSTRAINED_FPS : 30;
+    const processor = new BackgroundProcessorWrapper(transformer, 'background-processor', { maxFps });
+    watchLoad(processor, maxFps);
     return processor;
 }
 
@@ -238,7 +294,7 @@ function thriftyTransformer(Base) {
     return Thrifty;
 }
 
-function watchLoad(processor) {
+function watchLoad(processor, maxFps) {
     const transformer = processor.transformer;
     let total = 0;
     let frames = 0;
@@ -252,17 +308,22 @@ function watchLoad(processor) {
         const now = performance.now();
         if (now - windowStart < WINDOW_MS) return;
         const average = total / frames;
+        const fps = frames * 1000 / (now - windowStart);
+        const cameraFps = processor.source?.getSettings().frameRate || maxFps;
+        const expectedFps = Math.min(maxFps, cameraFps);
         total = 0;
         frames = 0;
         windowStart = now;
-        windowsOver = average > BUDGET_MS ? windowsOver + 1 : 0;
-        if (windowsOver < 2) return;
+        const slow = fps < expectedFps * MIN_FPS_SHARE;
+        const badly = average > 2 * BUDGET_MS || fps < expectedFps * 0.5;
+        windowsOver = average > BUDGET_MS || slow ? windowsOver + 1 : 0;
+        if (windowsOver < 2 && !badly) return;
         windowsOver = 0;
 
         if (transformer.loadLevel < LOAD_LEVELS.length - 1) {
             transformer.loadLevel++;
-            console.info(`[Background] ${average.toFixed(1)} ms per frame, stepping down to level ${transformer.loadLevel}`);
-            applyLoadLevel(processor);
+            console.info(`[Background] ${average.toFixed(1)} ms per frame at ${fps.toFixed(0)} fps, stepping down to level ${transformer.loadLevel}`);
+            applyLoadLevel(transformer, processor.source);
         } else if (!warned) {
             warned = true;
             showToast('Your device is working hard on the background effect. If the call stutters, pick None under Cam.', 'warn', 6000);
@@ -270,17 +331,29 @@ function watchLoad(processor) {
     };
 }
 
-function applyLoadLevel(processor) {
-    const transformer = processor.transformer;
+// Camera constraints from before the effect lowered the resolution, to go back to without it
+const fullSizeConstraints = new WeakMap();
+
+async function restoreCameraSize(camera) {
+    const original = fullSizeConstraints.get(camera);
+    if (!original || camera.readyState === 'ended') return;
+    fullSizeConstraints.delete(camera);
+    await camera.applyConstraints(original).catch(err => console.warn('[Background] Could not restore the camera resolution', err));
+}
+
+async function applyLoadLevel(transformer, camera) {
     const level = LOAD_LEVELS[transformer.loadLevel];
     transformer.segmentEvery = level.segmentEvery;
-    const camera = processor.source;
     if (!level.height || !camera || camera.readyState === 'ended') return;
-    const width = Math.round(level.height * 16 / 9);
-    camera.applyConstraints({
+    if (!fullSizeConstraints.has(camera)) fullSizeConstraints.set(camera, camera.getConstraints());
+    // Long edge × short edge, matched to how the camera delivers (phones may deliver portrait)
+    const longEdge = Math.round(level.height * 16 / 9);
+    const { width = 16, height = 9 } = camera.getSettings();
+    const [w, h] = width >= height ? [longEdge, level.height] : [level.height, longEdge];
+    await camera.applyConstraints({
         ...camera.getConstraints(),
-        width: { ideal: width, max: width },
-        height: { ideal: level.height, max: level.height }
+        width: { ideal: w, max: w },
+        height: { ideal: h, max: h }
     }).catch(err => console.warn('[Background] Could not lower the camera resolution', err));
 }
 
@@ -291,8 +364,10 @@ function applyLoadLevel(processor) {
  * getTrack returns the live camera track, or null while the camera is off.
  */
 export function buildBackgroundPicker(getTrack) {
-    const options = availableBackgrounds(getTrack());
-    if (options.length === 0) return null;
+    const builtIn = availableBackgrounds(getTrack());
+    if (builtIn.length === 0) return null;
+    const canAdd = canProcessVideo() && customStoreAvailable();
+    let custom = [];
 
     const section = document.createElement('div');
     section.className = 'bg-section';
@@ -304,9 +379,23 @@ export function buildBackgroundPicker(getTrack) {
     grid.className = 'bg-grid';
     grid.setAttribute('role', 'group');
     grid.setAttribute('aria-labelledby', 'bgHeading');
-    section.append(heading, grid);
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.hidden = true;
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'cam-item bg-remove';
+    removeBtn.textContent = 'Remove this picture';
+    section.append(heading, grid, removeBtn, fileInput);
+    if (isIOS()) {
+        const hint = document.createElement('p');
+        hint.className = 'bg-hint';
+        hint.textContent = 'On iPhone and iPad, Portrait under Video Effects in Control Center blurs without slowing the call.';
+        section.append(hint);
+    }
 
-    const buttons = options.map(option => {
+    function optionButton(option) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'bg-option';
@@ -314,24 +403,82 @@ export function buildBackgroundPicker(getTrack) {
         btn.title = option.name;
         btn.setAttribute('aria-label', option.name);
         if (option.draw) {
-            btn.style.backgroundImage = `url(${artFor(option).toDataURL()})`;
+            btn.style.backgroundImage = `url(${thumbnailFor(option)})`;
+            if (option.canvas.smooth) btn.classList.add('bg-option--smooth');
+        } else if (option.url) {
+            btn.style.backgroundImage = `url(${option.url})`;
+            btn.classList.add('bg-option--smooth');
         } else {
             btn.textContent = option.short;
             btn.classList.add('bg-option--text');
         }
         btn.onclick = (e) => {
             e.preventDefault(); e.stopPropagation();
-            pickBackground(option, getTrack(), markSelected);
+            pickBackground(option, getTrack(), render);
         };
         return btn;
-    });
-    grid.append(...buttons);
-
-    function markSelected() {
-        const chosen = getBackgroundChoice();
-        buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.background === chosen)));
     }
-    markSelected();
+
+    function render() {
+        const chosen = getBackgroundChoice();
+        const options = [...builtIn.filter(b => !b.custom), ...custom];
+        // A chosen picture that is not listed (other name, removed) still shows, so it can be left
+        if (chosen.startsWith(CUSTOM_PREFIX) && !options.some(o => o.id === chosen)) {
+            options.push({ id: chosen, name: 'Your picture, not available here', short: 'Gone' });
+        }
+        const buttons = options.map(optionButton);
+        if (canAdd && custom.length < MAX_CUSTOM) {
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'bg-option bg-option--text bg-option--add';
+            addBtn.textContent = 'Add';
+            addBtn.title = 'Add your own picture';
+            addBtn.setAttribute('aria-label', 'Add your own picture');
+            addBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); fileInput.click(); };
+            buttons.push(addBtn);
+        }
+        grid.replaceChildren(...buttons);
+        buttons.forEach(b => {
+            if (b.dataset.background) b.setAttribute('aria-pressed', String(b.dataset.background === chosen));
+        });
+        removeBtn.hidden = !custom.some(o => o.id === chosen);
+    }
+
+    fileInput.onchange = async () => {
+        const file = fileInput.files?.[0];
+        fileInput.value = '';
+        if (!file) return;
+        try {
+            const option = await addCustomBackground(file);
+            custom = await listCustomBackgrounds();
+            render();
+            await pickBackground(option, getTrack(), render);
+        } catch (err) {
+            console.error('[Background] Adding a picture failed', err);
+            showToast(err?.userMessage || "That picture couldn't be added.", 'error', 5000);
+        }
+    };
+
+    removeBtn.onclick = async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const chosen = getBackgroundChoice();
+        try {
+            await removeCustomBackground(chosen);
+        } catch (err) {
+            console.error('[Background] Removing a picture failed', err);
+            showToast("That picture couldn't be removed.", 'error', 5000);
+            return;
+        }
+        custom = await listCustomBackgrounds().catch(() => []);
+        // The picture in use is gone; blur keeps the background hidden until another is picked
+        await pickBackground(BACKGROUNDS.find(b => b.id === 'blur'), getTrack(), render);
+        showToast('Picture removed. Using blur until you pick another background.');
+    };
+
+    render();
+    if (customStoreAvailable()) {
+        listCustomBackgrounds().then(list => { custom = list; render(); }).catch(err => console.warn('[Background] Could not read your pictures', err));
+    }
     return section;
 }
 
@@ -365,35 +512,179 @@ async function pickBackground(option, track, onChange) {
     }
 }
 
+// --- own pictures, per name, in this browser -----------------------------------------------
+
+const DB_NAME = 'portal-backgrounds';
+const DB_STORE = 'pictures';
+
+function customStoreAvailable() {
+    try { return typeof indexedDB !== 'undefined' && !!currentOwner(); } catch (e) { return false; }
+}
+
+// Pictures belong to the name the person joins with (saved by the join form)
+function currentOwner() {
+    try { return (localStorage.getItem('portal_username') || '').trim().toLowerCase(); } catch (e) { return ''; }
+}
+
+let dbPromise;
+function openDb() {
+    dbPromise ??= new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => {
+            const store = req.result.createObjectStore(DB_STORE, { keyPath: 'id' });
+            store.createIndex('owner', 'owner');
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+        req.onblocked = () => reject(new Error('Background picture storage is blocked'));
+    }).catch(err => {
+        dbPromise = undefined;
+        throw err;
+    });
+    return dbPromise;
+}
+
+async function dbRequest(mode, makeRequest) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, mode);
+        const req = makeRequest(tx.objectStore(DB_STORE));
+        tx.oncomplete = () => resolve(req.result);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+    });
+}
+
+const customUrls = new Map();
+function urlForRecord(record) {
+    if (!customUrls.has(record.id)) customUrls.set(record.id, URL.createObjectURL(record.blob));
+    return customUrls.get(record.id);
+}
+
+/** The current name's pictures as picker options, oldest first. */
+async function listCustomBackgrounds() {
+    const owner = currentOwner();
+    if (!owner) return [];
+    const records = await dbRequest('readonly', store => store.index('owner').getAll(owner));
+    return records
+        .sort((a, b) => a.created - b.created)
+        .map((record, i) => ({ id: CUSTOM_PREFIX + record.id, name: `Your picture ${i + 1}`, url: urlForRecord(record), custom: true }));
+}
+
+/** Object URL of an own picture, or null when it is gone or belongs to another name. */
+async function customImageUrl(id) {
+    try {
+        const record = await dbRequest('readonly', store => store.get(id.slice(CUSTOM_PREFIX.length)));
+        return record && record.owner === currentOwner() ? urlForRecord(record) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function userError(message) {
+    const err = new Error(message);
+    err.userMessage = message;
+    return err;
+}
+
+async function addCustomBackground(file) {
+    const owner = currentOwner();
+    if (!owner) throw userError('Join with a name to add your own pictures.');
+    if (file.size > MAX_UPLOAD_BYTES) throw userError('That picture is too large. Pick one under 25 MB.');
+    let bitmap;
+    try {
+        bitmap = await createImageBitmap(file);
+    } catch (e) {
+        throw userError("That file isn't a picture this browser can open.");
+    }
+    // Stored at most 1920 px wide or tall: plenty for a background, small enough to keep many
+    const scale = Math.min(1, MAX_UPLOAD_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    if (!blob) throw userError("That picture couldn't be added.");
+
+    const existing = await listCustomBackgrounds();
+    if (existing.length >= MAX_CUSTOM) throw userError(`You can keep up to ${MAX_CUSTOM} pictures. Remove one first.`);
+    const record = {
+        id: (crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+        owner,
+        blob,
+        created: Date.now()
+    };
+    try {
+        await dbRequest('readwrite', store => store.add(record));
+    } catch (err) {
+        throw userError(err?.name === 'QuotaExceededError'
+            ? 'This browser has no room left for more pictures. Remove one first.'
+            : "That picture couldn't be saved in this browser.");
+    }
+    return { id: CUSTOM_PREFIX + record.id, name: `Your picture ${existing.length + 1}`, url: urlForRecord(record), custom: true };
+}
+
+async function removeCustomBackground(id) {
+    const key = id.slice(CUSTOM_PREFIX.length);
+    const record = await dbRequest('readonly', store => store.get(key));
+    if (!record || record.owner !== currentOwner()) return;
+    await dbRequest('readwrite', store => store.delete(key));
+    const url = customUrls.get(key);
+    if (url) {
+        URL.revokeObjectURL(url);
+        customUrls.delete(key);
+    }
+}
+
 // --- pixel-art backgrounds -----------------------------------------------------------------
 
 const artCache = new Map();
 function artFor(option) {
     if (!artCache.has(option.id)) {
         const canvas = document.createElement('canvas');
-        canvas.width = ART_W;
-        canvas.height = ART_H;
-        option.draw(canvas.getContext('2d'), seededRandom(option.id.length * 7919));
+        canvas.width = option.canvas.width;
+        canvas.height = option.canvas.height;
+        option.draw(canvas.getContext('2d'), seededRandom(option.id.length * 7919), canvas.width, canvas.height);
         artCache.set(option.id, canvas);
     }
     return artCache.get(option.id);
 }
 
+// Menu tiles show a 160×90 copy, not the full-size art
+const thumbnails = new Map();
+function thumbnailFor(option) {
+    if (!thumbnails.has(option.id)) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 160;
+        canvas.height = 90;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = option.canvas.smooth;
+        ctx.drawImage(artFor(option), 0, 0, canvas.width, canvas.height);
+        thumbnails.set(option.id, canvas.toDataURL());
+    }
+    return thumbnails.get(option.id);
+}
+
 const imageUrls = new Map();
 async function backgroundImageUrl(id) {
     if (imageUrls.has(id)) return imageUrls.get(id);
-    const art = artFor(BACKGROUNDS.find(b => b.id === id));
+    const option = BACKGROUNDS.find(b => b.id === id);
+    const art = artFor(option);
     const canvas = document.createElement('canvas');
-    canvas.width = ART_W * ART_SCALE;
-    canvas.height = ART_H * ART_SCALE;
+    canvas.width = art.width * option.canvas.scale;
+    canvas.height = art.height * option.canvas.scale;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = option.canvas.smooth;
     ctx.drawImage(art, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     const url = URL.createObjectURL(blob);
     imageUrls.set(id, url);
     return url;
 }
+
+const ART_W = PIXEL_CANVAS.width;
+const ART_H = PIXEL_CANVAS.height;
 
 function seededRandom(seed) {
     return () => {
@@ -529,4 +820,105 @@ function drawWall(ctx, random) {
     const leaf = (x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
     [[40, 92, 2, 46], [33, 104, 8, 4], [43, 98, 10, 4], [30, 116, 10, 4], [44, 112, 12, 4], [36, 88, 6, 6], [27, 124, 9, 4], [46, 124, 10, 4]]
         .forEach(([x, y, w, h], i) => leaf(x, y, w, h, i === 0 ? '#2f5a3a' : (i % 2 ? '#3f7a4a' : '#356a40')));
+}
+
+// --- prism backgrounds ---------------------------------------------------------------------
+// Smooth, dark and low in contrast like the Prism theme itself: soft light, no texture (grain
+// would also cost bitrate in every frame sent).
+
+// The identity spectrum (OKLCH .82 / .11) in sRGB, for canvases that may not parse oklch()
+const PRISM_SPECTRUM = ['#f2a7b4', '#e8b98f', '#c3cc8e', '#8fd3c4', '#9cc4f0', '#c4b1ee', '#eba9d2'];
+
+function softGlow(ctx, x, y, radius, color) {
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    glow.addColorStop(0, color);
+    glow.addColorStop(1, 'rgb(0 0 0 / 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+}
+
+function vignette(ctx, w, h, strength) {
+    const v = ctx.createRadialGradient(w / 2, h * 0.45, h * 0.35, w / 2, h * 0.45, w * 0.75);
+    v.addColorStop(0, 'rgb(0 0 0 / 0)');
+    v.addColorStop(1, `rgb(0 0 0 / ${strength})`);
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, w, h);
+}
+
+// The join screen's motif: white light entering from the left, a faint spectrum leaving right
+function drawPrismLight(ctx, random, w, h) {
+    ctx.fillStyle = '#111219';
+    ctx.fillRect(0, 0, w, h);
+    softGlow(ctx, w * 0.5, -h * 0.15, h * 1.1, 'rgb(35 37 56 / 1)');
+
+    const px = w * 0.3;
+    const py = h * 0.58;
+    const beam = ctx.createLinearGradient(0, 0, px, 0);
+    beam.addColorStop(0, 'rgb(255 255 255 / 0)');
+    beam.addColorStop(1, 'rgb(255 255 255 / .45)');
+    ctx.strokeStyle = beam;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, py + px * Math.tan(7 * Math.PI / 180));
+    ctx.lineTo(px, py);
+    ctx.stroke();
+    softGlow(ctx, px, py, h * 0.18, 'rgb(255 255 255 / .08)');
+
+    // Fan drawn on its own layer, then faded out to the right
+    const fan = document.createElement('canvas');
+    fan.width = w;
+    fan.height = h;
+    const f = fan.getContext('2d');
+    const bands = f.createLinearGradient(0, h * 0.05, 0, h * 0.95);
+    PRISM_SPECTRUM.forEach((c, i) => bands.addColorStop(i / (PRISM_SPECTRUM.length - 1), c));
+    f.fillStyle = bands;
+    f.beginPath();
+    f.moveTo(px, py - 3);
+    f.lineTo(w, h * 0.05);
+    f.lineTo(w, h * 0.95);
+    f.lineTo(px, py + 3);
+    f.closePath();
+    f.fill();
+    const fade = f.createLinearGradient(px, 0, w, 0);
+    fade.addColorStop(0, 'rgb(0 0 0 / 0)');
+    fade.addColorStop(0.15, 'rgb(0 0 0 / 1)');
+    fade.addColorStop(0.6, 'rgb(0 0 0 / .7)');
+    fade.addColorStop(1, 'rgb(0 0 0 / 0)');
+    f.globalCompositeOperation = 'destination-in';
+    f.fillStyle = fade;
+    f.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 0.2;
+    ctx.drawImage(fan, 0, 0);
+    ctx.globalAlpha = 1;
+    vignette(ctx, w, h, 0.45);
+}
+
+// Evening sky: deep indigo fading to a muted rose low on the horizon
+function drawPrismDusk(ctx, random, w, h) {
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#12131f');
+    sky.addColorStop(0.45, '#1d1c33');
+    sky.addColorStop(0.78, '#352a45');
+    sky.addColorStop(1, '#4a3447');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    ctx.scale(1, 0.35);
+    softGlow(ctx, w * 0.62, h / 0.35, w * 0.55, 'rgb(235 169 160 / .22)');
+    ctx.restore();
+    softGlow(ctx, w * 0.2, h * 0.1, h * 0.6, 'rgb(156 196 240 / .06)');
+    vignette(ctx, w, h, 0.35);
+}
+
+// A plain photo-studio backdrop: lit in the middle, falling off to the edges
+function drawPrismStudio(ctx, random, w, h) {
+    ctx.fillStyle = '#15161d';
+    ctx.fillRect(0, 0, w, h);
+    softGlow(ctx, w * 0.5, h * 0.42, w * 0.6, 'rgb(70 72 86 / 1)');
+    const floor = ctx.createLinearGradient(0, h * 0.7, 0, h);
+    floor.addColorStop(0, 'rgb(0 0 0 / 0)');
+    floor.addColorStop(1, 'rgb(0 0 0 / .35)');
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, 0, w, h);
+    vignette(ctx, w, h, 0.4);
 }

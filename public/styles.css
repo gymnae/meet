@@ -679,11 +679,16 @@ body.gutter-dragging .video-tile { pointer-events: none; }
     border-radius: 0;
     cursor: pointer;
 }
+.bg-option--smooth { image-rendering: auto; }
 .bg-option[aria-pressed="true"] { border-color: var(--role-info); box-shadow: inset 0 0 0 var(--stroke) var(--role-info); }
 .bg-option--text[aria-pressed="true"] { color: var(--ink); background-color: var(--role-info); }
 .bg-option:focus-visible { outline: 2px solid var(--role-info); outline-offset: 1px; }
 .bg-option:active { transform: translate(1px, 1px); }
 @media (hover: hover) { .bg-option:hover { border-color: var(--role-info); } }
+.bg-option--add { border-style: dashed; }
+.bg-remove { justify-content: center; }
+.bg-hint { margin: 0; font-size: var(--fs-small); color: var(--text-3); white-space: normal; }
+.bg-remove[hidden] { display: none; }
 
 /* Sound panel: leveling, volumes, mic processing */
 #soundMenu {
