@@ -369,6 +369,10 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 }
 [data-theme="prism"] .cam-item.turn-off { color: var(--ink); background: var(--role-danger); border-color: var(--role-danger); }
 [data-theme="prism"] .react-emoji-btn { background: var(--surface-2); border: 0; border-radius: var(--r-m); }
+[data-theme="prism"] .bg-option { border-color: transparent; border-radius: var(--r-s); }
+[data-theme="prism"] .bg-option[aria-pressed="true"] { border-color: var(--light); box-shadow: inset 0 0 0 var(--stroke) var(--light); }
+[data-theme="prism"] .bg-option--text[aria-pressed="true"] { background-color: var(--light); }
+[data-theme="prism"] .bg-heading { color: var(--text-2); }
 [data-theme="prism"] #soundMenu { padding: var(--s-3); }
 [data-theme="prism"] .sound-heading { text-transform: none; letter-spacing: 0; }
 [data-theme="prism"] .sound-seg { padding: 2px; gap: 2px; background: var(--surface-2); border: 0; border-radius: var(--r-s); }

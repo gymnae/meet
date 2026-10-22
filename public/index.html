@@ -27,6 +27,15 @@
     <link rel="stylesheet" href="/theme-prism.css">
     <!-- Deferred: only needed after "Connect". Runs before the module script (document order). -->
     <script defer src="/vendor/livekit-client.umd.js"></script>
+    <!-- Bare imports of the background-effect modules, loaded only once an effect is picked -->
+    <script type="importmap">
+        {
+            "imports": {
+                "livekit-client": "/js/vendor/livekit-client-shim.js",
+                "@mediapipe/tasks-vision": "/vendor/tasks-vision/vision_bundle.mjs"
+            }
+        }
+    </script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">

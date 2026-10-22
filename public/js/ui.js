@@ -156,10 +156,12 @@ export function showToast(message, variant = 'info', duration = 3600) {
 
 export function applyDynamicMirrorEffect(videoTrackInstance) {
     const localTile = document.getElementById('tile_local_camera');
-    if (!localTile || !videoTrackInstance || !videoTrackInstance.mediaStreamTrack) return;
+    // With a background effect on, mediaStreamTrack is the processed canvas track; read the camera itself
+    const cameraTrack = videoTrackInstance?.getProcessor?.()?.source || videoTrackInstance?.mediaStreamTrack;
+    if (!localTile || !cameraTrack) return;
     
-    const trackLabel = (videoTrackInstance.mediaStreamTrack.label || '').toLowerCase();
-    const trackSettings = videoTrackInstance.mediaStreamTrack.getSettings ? videoTrackInstance.mediaStreamTrack.getSettings() : {};
+    const trackLabel = (cameraTrack.label || '').toLowerCase();
+    const trackSettings = cameraTrack.getSettings ? cameraTrack.getSettings() : {};
     const facingMode = trackSettings.facingMode || '';
 
     if (facingMode === 'environment' || trackLabel.includes('back') || trackLabel.includes('rück') || trackLabel.includes('rear')) {

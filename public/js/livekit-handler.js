@@ -2,6 +2,7 @@ import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js'
 import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints, setMicMonitorMuted, setPreferredMicDeviceId } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
+import { applyBackground, buildBackgroundPicker } from './background-effects.js';
 
 export function ensureParticipantTile(participant, streamSource = 'camera') {
     const isLocalUser = participant.isLocal || (AppState.activeRoom && participant.identity === AppState.activeRoom.localParticipant?.identity);
@@ -468,6 +469,8 @@ export async function toggleCam() {
                                 let videoTag = localTile?.querySelector('video');
                                 if (videoTag) updatedTrack.attach(videoTag);
                                 applyDynamicMirrorEffect(updatedTrack);
+                                // The processor follows the new camera by itself; platform blur and a lowered resolution do not
+                                applyBackground(updatedTrack).catch(err => console.error("[Background] Re-applying after camera switch failed", err));
                             }
                         } else {
                             if (cameraPub && cameraPub.videoTrack) {
@@ -504,6 +507,15 @@ export async function toggleCam() {
                                 videoTag.play().catch(() => {});
                                 applyDynamicMirrorEffect(newLensTrack);
                             }
+                            try {
+                                await applyBackground(newLensTrack);
+                            } catch (bgErr) {
+                                console.error("[Background] Effect failed to start", bgErr);
+                                newLensTrack.stop();
+                                markCamOff();
+                                showToast("Your background effect couldn't start, so your camera stays off. Pick None under Cam to start it without one.", "error", 6000);
+                                return;
+                            }
                             await AppState.activeRoom.localParticipant.publishTrack(newLensTrack, {
                                 videoCodec: AppState.currentPublishedCodec,
                                 simulcast: true
@@ -515,9 +527,28 @@ export async function toggleCam() {
                 };
                 menu.appendChild(optionRow);
             });
+
+            const backgroundPicker = buildBackgroundPicker(() => {
+                if (AppState.camMuted) return null;
+                return AppState.activeRoom?.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera)?.videoTrack || null;
+            });
+            if (backgroundPicker) menu.appendChild(backgroundPicker);
         }
         menu.style.display = 'flex';
     } catch (err) { console.error("[Hardware] Device enumerator failed:", err); }
+}
+
+/** Marks the camera as off in state and on the dock button, and clears the local preview. */
+export function markCamOff() {
+    AppState.camMuted = true;
+    const btn = document.getElementById('btnCam');
+    if (btn) {
+        setDockLabel(btn, "Start");
+        btn.classList.add('active-off');
+    }
+    const localTile = document.getElementById('tile_local_camera');
+    if (localTile) localTile.querySelectorAll('video').forEach(v => { v.srcObject = null; v.remove(); });
+    recalculateLayout();
 }
 
 export async function toggleScreenShare() {

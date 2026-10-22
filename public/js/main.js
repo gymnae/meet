@@ -5,8 +5,9 @@ import {
     attachParticipantVideoTrack, toggleMic, toggleCam, toggleReactionMenu, 
     toggleScreenShare, cleanupTileTrack, cleanupAllTilesForParticipant, 
     terminateSession, handleIncomingDataPacket, shouldJoinMuted, markMicMuted, ensureParticipantTile,
-    broadcastCodecPreference, evaluateAndNegotiateCodec
+    broadcastCodecPreference, evaluateAndNegotiateCodec, markCamOff
 } from './livekit-handler.js';
+import { applyBackground } from './background-effects.js';
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
 import {
     normalizeOutgoingMicTrack,
@@ -295,6 +296,13 @@ async function initiateCall() {
             applyDynamicMirrorEffect(localVideoTrack);
             if (localVideoTrack.mediaStreamTrack) AppState.currentCameraDeviceId = localVideoTrack.mediaStreamTrack.getSettings().deviceId;
         }
+        // Starts the chosen background effect while connecting; the camera is only sent once it runs.
+        const backgroundReady = localVideoTrack
+            ? applyBackground(localVideoTrack).then(() => true, (err) => {
+                console.error("[Background] Effect failed to start", err);
+                return false;
+            })
+            : Promise.resolve(true);
 
         // --- LiveKit Hooks ---
         AppState.activeRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -435,6 +443,14 @@ async function initiateCall() {
 
         for (const track of AppState.preWarmedTracks) {
             if (track.kind === 'video') {
+                if (!(await backgroundReady)) {
+                    // Sending the camera without the effect would show the background the person chose to hide
+                    track.stop();
+                    AppState.preWarmedTracks = AppState.preWarmedTracks.filter(t => t !== track);
+                    markCamOff();
+                    showToast("Your background effect couldn't start, so you joined with your camera off. Pick None under Cam to start it without one.", "error", 6000);
+                    continue;
+                }
                 await AppState.activeRoom.localParticipant.publishTrack(track, {
                     videoCodec: AppState.currentPublishedCodec,
                     simulcast: true

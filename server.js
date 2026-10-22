@@ -140,6 +140,24 @@ app.get('/vendor/livekit-client.umd.js', (req, res) => {
     res.sendFile(livekitClientPath);
 });
 
+// Background blur and virtual backgrounds, same reasoning: LiveKit's processor and MediaPipe's
+// segmenter (ES modules, mapped by the import map in index.html) plus MediaPipe's WebAssembly
+// runtime. Only fetched once someone picks a background effect.
+const requireFromHere = createRequire(import.meta.url);
+const trackProcessorsDir = path.dirname(requireFromHere.resolve('@livekit/track-processors'));
+const tasksVisionDir = path.dirname(requireFromHere.resolve('@mediapipe/tasks-vision'));
+app.get('/vendor/track-processors.mjs', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(trackProcessorsDir, 'index.mjs'));
+});
+app.get('/vendor/tasks-vision/vision_bundle.mjs', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(tasksVisionDir, 'vision_bundle.mjs'));
+});
+app.use('/vendor/tasks-vision/wasm', express.static(path.join(tasksVisionDir, 'wasm'), {
+    setHeaders(res) { res.setHeader('Cache-Control', 'no-cache'); }
+}));
+
 // Hash helper
 function hashPassword(pass) {
     return crypto.createHash('sha256').update(pass).digest('hex');

@@ -14,6 +14,7 @@ The browser client is built with vanilla JavaScript and CSS; a small Node.js ser
 - Video and audio calls powered by LiveKit, including device selection and graceful audio-only/listen-only fallbacks
 - Responsive participant grids, screen-sharing layouts, resizable picture-in-picture, and fullscreen mode
 - Screen sharing and local browser recording
+- Background blur and pixel-art backgrounds, picked under Cam. Uses the platform's own blur where the browser offers it (Chrome on Windows with Studio Effects, ChromeOS); otherwise MediaPipe's selfie segmenter on the GPU via LiveKit's track processors, masking every 2nd frame and stepping down (fewer masks, lower camera resolution) on devices that can't keep up. Offered only on devices with WebGL2 and at least 4 cores and 4 GB where reported. If an effect can't start, the camera stays off rather than showing the background
 - Reactions, raised hands, active-speaker feedback, and sound-processing controls
 - Opt-in self-monitoring ("Hear yourself" in the sound panel): your mic is played back locally, straight from the browser's audio graph, so there's no network delay. Meant for wired headphones; echo cancellation is off while it's on
 - Ephemeral chat (1 minute) and file sharing up to 200 MB (10 minutes)
@@ -91,3 +92,5 @@ This project was created with the assistance of multiple large language models (
 ## License
 
 See [LICENSE](LICENSE).
+
+`public/models/selfie_segmenter*.tflite` are Google's MediaPipe selfie segmentation models, licensed under Apache 2.0.
