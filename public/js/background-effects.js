@@ -7,12 +7,15 @@
 //    every 2nd frame and the mask is reused in between, and the cost per frame is watched: a
 //    device over budget steps down to less frequent masks and a smaller camera picture.
 //    Nothing is turned off by itself: that would show the background the person chose to hide.
+//    The compositing is our own (background-compositor.js): soft, steady edges and moving backdrops.
 // Everything is self-hosted (see server.js) and loaded only once an effect is picked.
-// People can add their own pictures. They stay in this browser (IndexedDB), filed under the name
-// they join with, and never go to the server; only the video they appear in does.
+// People can add their own pictures, animated pictures and short videos. They stay in this browser
+// (IndexedDB), filed under the name they join with, and never go to the server; only the video
+// they appear in does. While someone shares their screen, it can be their backdrop too.
 
 import { showToast } from './ui.js';
 import { isIOS } from './state.js';
+import { createCompositor } from './background-compositor.js';
 
 const STORAGE_KEY = 'portal_background';
 const PROCESSOR_MODULE = '/vendor/track-processors.mjs';
@@ -50,6 +53,7 @@ const PRISM_CANVAS = { width: 1280, height: 720, scale: 1, smooth: true };
 export const BACKGROUNDS = [
     { id: 'none', name: 'No effect', short: 'None' },
     { id: 'blur', name: 'Blur', short: 'Blur' },
+    { id: 'screen', name: 'Your screen while you share it, blur otherwise', short: 'Screen', screen: true },
     { id: 'city', name: 'Night city', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawCity },
     { id: 'grid', name: 'Neon grid', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawGrid },
     { id: 'wall', name: 'Quiet wall', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawWall },
@@ -63,6 +67,9 @@ const CUSTOM_PREFIX = 'custom:';
 const MAX_CUSTOM = 8;
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const MAX_UPLOAD_EDGE = 1920;
+const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
+// A shared screen is large and mostly still: fewer of its frames are copied to the GPU
+const SCREEN_BACKDROP_FPS = 15;
 
 export function getBackgroundChoice() {
     try {
@@ -148,7 +155,14 @@ export function availableBackgrounds(track) {
     }
     // The set that matches the theme, plus a choice made under the other one so it stays visible
     const chosen = getBackgroundChoice();
-    return BACKGROUNDS.filter(b => !b.theme || (own && (b.theme === currentTheme() || b.id === chosen)));
+    return BACKGROUNDS.filter(b => {
+        if (b.screen) return own && canShareScreen();
+        return !b.theme || (own && (b.theme === currentTheme() || b.id === chosen));
+    });
+}
+
+function canShareScreen() {
+    return typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 }
 
 // --- applying the choice -------------------------------------------------------------------
@@ -177,7 +191,9 @@ async function applyNow(track, id) {
     if (!track || track.kind !== 'video' || sourceTrack(track)?.readyState === 'ended') return;
     // An own picture that is gone (removed, or chosen under another name) falls back to blur, not to
     // showing the background.
-    if (id.startsWith(CUSTOM_PREFIX) && !(await customImageUrl(id))) id = 'blur';
+    if (id.startsWith(CUSTOM_PREFIX) && !(await customRecord(id))) id = 'blur';
+    // The screen is the backdrop only while it is shared
+    if (id === 'screen' && !liveScreen()) id = 'blur';
     const current = track.getProcessor();
     const needsProcessing = id !== 'none' && !(id === 'blur' && hasNativeBlur(sourceTrack(track)));
     if (needsProcessing && !current && !canProcessVideo()) throw new Error('Background effects are not supported on this device');
@@ -206,6 +222,8 @@ async function applyNow(track, id) {
     } else {
         await track.setProcessor(await createProcessor(track, options));
     }
+    // The backdrop that was showing before stops playing
+    releaseBackdrops(options.imagePath);
     // An image covers the background on its own; the platform need not blur it as well.
     if (id !== 'blur') await setNativeBlur(sourceTrack(track), false).catch(() => {});
 }
@@ -213,13 +231,166 @@ async function applyNow(track, id) {
 async function stopProcessing(track) {
     const camera = sourceTrack(track);
     await track.stopProcessor();
+    releaseBackdrops(null);
     await restoreCameraSize(camera);
 }
 
 async function effectOptions(id) {
     if (id === 'blur') return { mode: 'background-blur', blurRadius: BLUR_RADIUS };
-    const imagePath = id.startsWith(CUSTOM_PREFIX) ? await customImageUrl(id) : await backgroundImageUrl(id);
+    let imagePath;
+    if (id === 'screen') {
+        const screen = liveScreen();
+        imagePath = backdropPath(`screen:${screen.id}`, () => new VideoBackdrop(new MediaStream([screen]), { fit: 'contain', maxFps: SCREEN_BACKDROP_FPS }));
+    } else if (id.startsWith(CUSTOM_PREFIX)) {
+        const record = await customRecord(id);
+        if (record.kind === 'video') {
+            imagePath = backdropPath(id, () => new VideoBackdrop(urlForRecord(record)));
+        } else if (record.kind === 'animated' && typeof ImageDecoder !== 'undefined') {
+            imagePath = backdropPath(id, () => new AnimatedBackdrop(record.blob));
+        } else {
+            // Without ImageDecoder an animated picture shows its first frame
+            imagePath = urlForRecord(record);
+        }
+    } else {
+        imagePath = await backgroundImageUrl(id);
+    }
     return { mode: 'virtual-background', imagePath };
+}
+
+// --- backdrops that move -------------------------------------------------------------------
+// Handed to the processor as an imagePath of the form "backdrop:<key>", which the transformer
+// looks up here instead of loading it as a picture. The compositor reads `image` on every frame
+// and copies it to the GPU only when `version` changed.
+
+const liveBackdrops = new Map();
+
+function backdropPath(key, make) {
+    const path = `backdrop:${key}`;
+    if (!liveBackdrops.has(path)) liveBackdrops.set(path, make());
+    return path;
+}
+
+/** Stops every moving backdrop except the one at keepPath. */
+function releaseBackdrops(keepPath) {
+    for (const [path, backdrop] of liveBackdrops) {
+        if (path === keepPath) continue;
+        backdrop.stop();
+        liveBackdrops.delete(path);
+    }
+}
+
+// A looping video file, or the shared screen (a MediaStream)
+class VideoBackdrop {
+    constructor(src, { fit = 'cover', maxFps = 0 } = {}) {
+        this.fit = fit;
+        this.minInterval = maxFps ? 1000 / maxFps : 0;
+        this.lastTime = -1;
+        this.lastTake = 0;
+        this.lastPlayAttempt = 0;
+        this.version = 0;
+        const video = document.createElement('video');
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        if (src instanceof MediaStream) video.srcObject = src;
+        else video.src = src;
+        this.video = video;
+        video.play().catch(() => {});
+    }
+
+    get width() { return this.video?.videoWidth || 0; }
+    get height() { return this.video?.videoHeight || 0; }
+
+    get image() {
+        const video = this.video;
+        if (!video) return null;
+        const now = performance.now();
+        // Browsers may pause a video nobody sees; start it again, at most once a second
+        if (video.paused && now - this.lastPlayAttempt > 1000) {
+            this.lastPlayAttempt = now;
+            video.play().catch(() => {});
+        }
+        if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
+        if (video.currentTime !== this.lastTime && now - this.lastTake >= this.minInterval) {
+            this.lastTime = video.currentTime;
+            this.lastTake = now;
+            this.version++;
+        }
+        return video;
+    }
+
+    stop() {
+        const video = this.video;
+        if (!video) return;
+        this.video = null;
+        video.pause();
+        // The screen's track belongs to the screen share; only this element lets go of it
+        video.srcObject = null;
+        video.removeAttribute('src');
+        video.load();
+    }
+}
+
+// An animated GIF, WebP or PNG, decoded frame by frame with WebCodecs' ImageDecoder
+class AnimatedBackdrop {
+    constructor(blob) {
+        this.fit = 'cover';
+        this.version = 0;
+        this.frame = null;
+        this.stopped = false;
+        this.run(blob).catch(err => console.warn('[Background] Animated picture stopped', err));
+    }
+
+    get image() { return this.frame; }
+    get width() { return this.frame?.displayWidth || 0; }
+    get height() { return this.frame?.displayHeight || 0; }
+
+    async run(blob) {
+        this.decoder = new ImageDecoder({ data: await blob.arrayBuffer(), type: blob.type });
+        await this.decoder.tracks.ready;
+        await this.decoder.completed;
+        const count = this.decoder.tracks.selectedTrack?.frameCount || 1;
+        for (let i = 0; !this.stopped; i = (i + 1) % count) {
+            const { image } = await this.decoder.decode({ frameIndex: i });
+            if (this.stopped) {
+                image.close();
+                break;
+            }
+            this.frame?.close();
+            this.frame = image;
+            this.version++;
+            if (count === 1) break;
+            // Like browsers do, very short frame times (often 0 in GIFs) play at 10 per second
+            const ms = (image.duration || 0) / 1000;
+            await new Promise(resolve => setTimeout(resolve, ms < 20 ? 100 : ms));
+        }
+    }
+
+    stop() {
+        this.stopped = true;
+        this.frame?.close();
+        this.frame = null;
+        try { this.decoder?.close(); } catch (e) {}
+    }
+}
+
+// --- the shared screen as backdrop ---------------------------------------------------------
+
+let screenTrack = null;
+
+function liveScreen() {
+    return screenTrack?.readyState === 'live' ? screenTrack : null;
+}
+
+/**
+ * Tells the effects which screen this person shares (a MediaStreamTrack), or null when they stop.
+ * With "Your screen" picked, the camera track's backdrop follows.
+ */
+export function setSharedScreen(track, cameraTrack) {
+    screenTrack = track || null;
+    if (getBackgroundChoice() === 'screen' && cameraTrack) {
+        applyBackground(cameraTrack).catch(err => console.error('[Background] Switching the screen backdrop failed', err));
+    }
 }
 
 let processorModule;
@@ -256,12 +427,47 @@ async function createProcessor(track, options) {
 let Thrifty;
 // LiveKit's transformer segments every frame and sends the very first frame unprocessed.
 // This one segments every n-th frame (the mask is kept between runs) and processes every frame.
+// It composites with our own pipeline, from MediaPipe's soft confidence mask rather than the
+// thresholded category mask, and also plays backdrops that move.
 function thriftyTransformer(Base) {
     Thrifty ??= class extends Base {
         segmentEvery = LOAD_LEVELS[0].segmentEvery;
         frameCount = 0;
         loadLevel = 0;
         onCost = null;
+
+        async init(opts) {
+            await super.init(opts);
+            await this.useOwnCompositor();
+        }
+
+        async restart(opts) {
+            await super.restart(opts);
+            await this.useOwnCompositor();
+        }
+
+        // LiveKit's init set up its own pipeline and gave it the options; swap it and give them again
+        async useOwnCompositor() {
+            if (!this.canvas || this.gl?.setBackgroundSource) return;
+            this.gl?.cleanup();
+            this.gl = createCompositor(this.canvas);
+            if (!this.gl) throw new Error('WebGL2 is not available for the background effect');
+            // The confidence mask instead of the category mask: same model run, one pass less
+            await this.imageSegmenter?.setOptions({ outputCategoryMask: false, outputConfidenceMasks: true });
+            this.gl.setBlurRadius(typeof this.options.blurRadius === 'number' ? this.options.blurRadius : null);
+            if (typeof this.options.imagePath === 'string') {
+                await this.loadAndSetBackground(this.options.imagePath)
+                    .catch(err => console.error('[Background] Could not load the backdrop', err));
+            }
+            this.gl.setBackgroundDisabled(this.options.backgroundDisabled ?? false);
+        }
+
+        async loadAndSetBackground(path) {
+            const live = liveBackdrops.get(path);
+            if (!live) return super.loadAndSetBackground(path);
+            // LiveKit's own pipeline (only there during init) cannot play it; ours gets it next
+            this.gl?.setBackgroundSource?.(live);
+        }
 
         async transform(frame, controller) {
             const idle = this.isDisabled || this.options.backgroundDisabled ||
@@ -274,7 +480,8 @@ function thriftyTransformer(Base) {
             try {
                 if (this.frameCount++ % this.segmentEvery === 0) {
                     this.imageSegmenter?.segmentForVideo(frame, start, (result) => {
-                        this.updateMask(result.categoryMask);
+                        const mask = result.confidenceMasks?.[0];
+                        if (mask) this.gl?.updateMask(mask.getAsWebGLTexture(), mask.width, mask.height);
                         result.close();
                     });
                 }
@@ -361,9 +568,10 @@ async function applyLoadLevel(transformer, camera) {
 
 /**
  * The "Background" section of the camera menu, or null when this device can do no effect.
- * getTrack returns the live camera track, or null while the camera is off.
+ * getTrack returns the live camera track, or null while the camera is off. startScreenShare starts
+ * sharing the screen, for when "Your screen" is picked while nothing is shared.
  */
-export function buildBackgroundPicker(getTrack) {
+export function buildBackgroundPicker(getTrack, { startScreenShare } = {}) {
     const builtIn = availableBackgrounds(getTrack());
     if (builtIn.length === 0) return null;
     const canAdd = canProcessVideo() && customStoreAvailable();
@@ -381,12 +589,12 @@ export function buildBackgroundPicker(getTrack) {
     grid.setAttribute('aria-labelledby', 'bgHeading');
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = 'image/*';
+    fileInput.accept = ['image/*', ...VIDEO_TYPES].join(',');
     fileInput.hidden = true;
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'cam-item bg-remove';
-    removeBtn.textContent = 'Remove this picture';
+    removeBtn.textContent = 'Remove this background';
     section.append(heading, grid, removeBtn, fileInput);
     if (isIOS()) {
         const hint = document.createElement('p');
@@ -412,9 +620,10 @@ export function buildBackgroundPicker(getTrack) {
             btn.textContent = option.short;
             btn.classList.add('bg-option--text');
         }
-        btn.onclick = (e) => {
+        btn.onclick = async (e) => {
             e.preventDefault(); e.stopPropagation();
-            pickBackground(option, getTrack(), render);
+            await pickBackground(option, getTrack(), render);
+            if (option.screen && getBackgroundChoice() === 'screen' && !liveScreen()) startScreenShare?.();
         };
         return btn;
     }
@@ -424,7 +633,7 @@ export function buildBackgroundPicker(getTrack) {
         const options = [...builtIn.filter(b => !b.custom), ...custom];
         // A chosen picture that is not listed (other name, removed) still shows, so it can be left
         if (chosen.startsWith(CUSTOM_PREFIX) && !options.some(o => o.id === chosen)) {
-            options.push({ id: chosen, name: 'Your picture, not available here', short: 'Gone' });
+            options.push({ id: chosen, name: 'Your background, not available here', short: 'Gone' });
         }
         const buttons = options.map(optionButton);
         if (canAdd && custom.length < MAX_CUSTOM) {
@@ -432,8 +641,8 @@ export function buildBackgroundPicker(getTrack) {
             addBtn.type = 'button';
             addBtn.className = 'bg-option bg-option--text bg-option--add';
             addBtn.textContent = 'Add';
-            addBtn.title = 'Add your own picture';
-            addBtn.setAttribute('aria-label', 'Add your own picture');
+            addBtn.title = 'Add your own picture, animated picture or short video';
+            addBtn.setAttribute('aria-label', addBtn.title);
             addBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); fileInput.click(); };
             buttons.push(addBtn);
         }
@@ -454,8 +663,8 @@ export function buildBackgroundPicker(getTrack) {
             render();
             await pickBackground(option, getTrack(), render);
         } catch (err) {
-            console.error('[Background] Adding a picture failed', err);
-            showToast(err?.userMessage || "That picture couldn't be added.", 'error', 5000);
+            console.error('[Background] Adding a background failed', err);
+            showToast(err?.userMessage || "That file couldn't be added.", 'error', 5000);
         }
     };
 
@@ -465,14 +674,14 @@ export function buildBackgroundPicker(getTrack) {
         try {
             await removeCustomBackground(chosen);
         } catch (err) {
-            console.error('[Background] Removing a picture failed', err);
-            showToast("That picture couldn't be removed.", 'error', 5000);
+            console.error('[Background] Removing a background failed', err);
+            showToast("That background couldn't be removed.", 'error', 5000);
             return;
         }
         custom = await listCustomBackgrounds().catch(() => []);
-        // The picture in use is gone; blur keeps the background hidden until another is picked
+        // The one in use is gone; blur keeps the background hidden until another is picked
         await pickBackground(BACKGROUNDS.find(b => b.id === 'blur'), getTrack(), render);
-        showToast('Picture removed. Using blur until you pick another background.');
+        showToast('Removed. Using blur until you pick another background.');
     };
 
     render();
@@ -555,11 +764,22 @@ async function dbRequest(mode, makeRequest) {
     });
 }
 
+// Records: { id, owner, blob, created, kind, poster }. kind is 'picture' (a JPEG, also when
+// missing: records from before videos), 'animated' (the file as uploaded) or 'video' (likewise);
+// poster is a small still for the menu tile, kept for animated pictures and videos.
 const customUrls = new Map();
-function urlForRecord(record) {
-    if (!customUrls.has(record.id)) customUrls.set(record.id, URL.createObjectURL(record.blob));
-    return customUrls.get(record.id);
+function objectUrl(key, blob) {
+    if (!customUrls.has(key)) customUrls.set(key, URL.createObjectURL(blob));
+    return customUrls.get(key);
 }
+function urlForRecord(record) {
+    return objectUrl(record.id, record.blob);
+}
+function thumbnailUrlForRecord(record) {
+    return record.poster ? objectUrl(`${record.id}:poster`, record.poster) : urlForRecord(record);
+}
+
+const KIND_NAMES = { picture: 'Your picture', animated: 'Your animation', video: 'Your video' };
 
 /** The current name's pictures as picker options, oldest first. */
 async function listCustomBackgrounds() {
@@ -568,14 +788,23 @@ async function listCustomBackgrounds() {
     const records = await dbRequest('readonly', store => store.index('owner').getAll(owner));
     return records
         .sort((a, b) => a.created - b.created)
-        .map((record, i) => ({ id: CUSTOM_PREFIX + record.id, name: `Your picture ${i + 1}`, url: urlForRecord(record), custom: true }));
+        .map((record, i) => customOption(record, i + 1));
 }
 
-/** Object URL of an own picture, or null when it is gone or belongs to another name. */
-async function customImageUrl(id) {
+function customOption(record, number) {
+    return {
+        id: CUSTOM_PREFIX + record.id,
+        name: `${KIND_NAMES[record.kind] || KIND_NAMES.picture} ${number}`,
+        url: thumbnailUrlForRecord(record),
+        custom: true
+    };
+}
+
+/** An own picture or video, or null when it is gone or belongs to another name. */
+async function customRecord(id) {
     try {
         const record = await dbRequest('readonly', store => store.get(id.slice(CUSTOM_PREFIX.length)));
-        return record && record.owner === currentOwner() ? urlForRecord(record) : null;
+        return record && record.owner === currentOwner() ? record : null;
     } catch (e) {
         return null;
     }
@@ -587,33 +816,112 @@ function userError(message) {
     return err;
 }
 
+/** A still of an image or video, at most maxEdge wide or tall, as JPEG. */
+async function stillOf(source, width, height, maxEdge) {
+    const scale = Math.min(1, maxEdge / Math.max(width, height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+}
+
+/** True for a GIF, WebP, PNG or AVIF with more than one frame (as far as this browser can tell). */
+async function isAnimated(file) {
+    if (typeof ImageDecoder === 'undefined' || !(await ImageDecoder.isTypeSupported(file.type).catch(() => false))) return false;
+    const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: file.type });
+    try {
+        await decoder.tracks.ready;
+        await decoder.completed;
+        const track = decoder.tracks.selectedTrack;
+        return !!track?.animated && track.frameCount > 1;
+    } catch (e) {
+        return false;
+    } finally {
+        decoder.close();
+    }
+}
+
+/** Checks a video plays here and takes a still from it for the menu tile. */
+function videoPoster(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        const finish = (fn) => {
+            clearTimeout(timeout);
+            video.onloadeddata = video.onseeked = video.onerror = null;
+            video.removeAttribute('src');
+            video.load();
+            URL.revokeObjectURL(url);
+            fn();
+        };
+        const fail = () => finish(() => reject(userError("That video doesn't play in this browser. MP4 (H.264) works almost everywhere.")));
+        const timeout = setTimeout(fail, 15000);
+        video.onerror = fail;
+        // The very first frame is often black; a moment in is a better picture of it
+        video.onloadeddata = () => {
+            const at = Math.min(0.5, (video.duration || 0) / 2);
+            if (at > 0) video.currentTime = at;
+            else video.onseeked();
+        };
+        video.onseeked = async () => {
+            if (!video.videoWidth) return fail();
+            const poster = await stillOf(video, video.videoWidth, video.videoHeight, 320);
+            finish(() => resolve(poster));
+        };
+        video.src = url;
+    });
+}
+
 async function addCustomBackground(file) {
     const owner = currentOwner();
     if (!owner) throw userError('Join with a name to add your own pictures.');
-    if (file.size > MAX_UPLOAD_BYTES) throw userError('That picture is too large. Pick one under 25 MB.');
-    let bitmap;
-    try {
-        bitmap = await createImageBitmap(file);
-    } catch (e) {
-        throw userError("That file isn't a picture this browser can open.");
+    if (file.size > MAX_UPLOAD_BYTES) throw userError('That file is too large. Pick one under 25 MB.');
+    const existing = await listCustomBackgrounds();
+    if (existing.length >= MAX_CUSTOM) throw userError(`You can keep up to ${MAX_CUSTOM} backgrounds. Remove one first.`);
+
+    let blob;
+    let poster;
+    let kind = 'picture';
+    if (file.type.startsWith('video/')) {
+        if (!VIDEO_TYPES.includes(file.type)) throw userError('Pick an MP4, WebM or MOV video.');
+        // Kept as uploaded: re-encoding in the browser would cost far more than it saves
+        poster = await videoPoster(file);
+        blob = file;
+        kind = 'video';
+    } else {
+        let bitmap;
+        try {
+            bitmap = await createImageBitmap(file);
+        } catch (e) {
+            throw userError("That file isn't a picture this browser can open.");
+        }
+        try {
+            if (await isAnimated(file).catch(() => false)) {
+                // Kept as uploaded so it keeps moving; the tile gets its first frame
+                poster = await stillOf(bitmap, bitmap.width, bitmap.height, 320);
+                blob = file;
+                kind = 'animated';
+            } else {
+                // Stored at most 1920 px wide or tall: plenty for a background, small enough to keep many
+                blob = await stillOf(bitmap, bitmap.width, bitmap.height, MAX_UPLOAD_EDGE);
+            }
+        } finally {
+            bitmap.close?.();
+        }
     }
-    // Stored at most 1920 px wide or tall: plenty for a background, small enough to keep many
-    const scale = Math.min(1, MAX_UPLOAD_EDGE / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close?.();
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
     if (!blob) throw userError("That picture couldn't be added.");
 
-    const existing = await listCustomBackgrounds();
-    if (existing.length >= MAX_CUSTOM) throw userError(`You can keep up to ${MAX_CUSTOM} pictures. Remove one first.`);
     const record = {
         id: (crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
         owner,
         blob,
-        created: Date.now()
+        created: Date.now(),
+        kind,
+        ...(poster ? { poster } : {})
     };
     try {
         await dbRequest('readwrite', store => store.add(record));
@@ -622,7 +930,7 @@ async function addCustomBackground(file) {
             ? 'This browser has no room left for more pictures. Remove one first.'
             : "That picture couldn't be saved in this browser.");
     }
-    return { id: CUSTOM_PREFIX + record.id, name: `Your picture ${existing.length + 1}`, url: urlForRecord(record), custom: true };
+    return customOption(record, existing.length + 1);
 }
 
 async function removeCustomBackground(id) {
@@ -630,10 +938,11 @@ async function removeCustomBackground(id) {
     const record = await dbRequest('readonly', store => store.get(key));
     if (!record || record.owner !== currentOwner()) return;
     await dbRequest('readwrite', store => store.delete(key));
-    const url = customUrls.get(key);
-    if (url) {
+    for (const urlKey of [key, `${key}:poster`]) {
+        const url = customUrls.get(urlKey);
+        if (!url) continue;
         URL.revokeObjectURL(url);
-        customUrls.delete(key);
+        customUrls.delete(urlKey);
     }
 }
 

@@ -531,6 +531,8 @@ export async function toggleCam() {
             const backgroundPicker = buildBackgroundPicker(() => {
                 if (AppState.camMuted) return null;
                 return AppState.activeRoom?.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera)?.videoTrack || null;
+            }, {
+                startScreenShare: () => { if (!AppState.screenSharingActive) toggleScreenShare(); }
             });
             if (backgroundPicker) menu.appendChild(backgroundPicker);
         }

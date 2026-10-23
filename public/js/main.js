@@ -7,7 +7,7 @@ import {
     terminateSession, handleIncomingDataPacket, shouldJoinMuted, markMicMuted, ensureParticipantTile,
     broadcastCodecPreference, evaluateAndNegotiateCodec, markCamOff
 } from './livekit-handler.js';
-import { applyBackground } from './background-effects.js';
+import { applyBackground, setSharedScreen } from './background-effects.js';
 import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
 import {
     normalizeOutgoingMicTrack,
@@ -336,14 +336,20 @@ async function initiateCall() {
             cleanupTileTrack(participant.identity, publication.source);
         });
 
+        // The shared screen can be the camera's backdrop ("Your screen" under Cam)
+        const localCamera = () => AppState.camMuted ? null
+            : AppState.activeRoom?.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera)?.videoTrack || null;
+
         AppState.activeRoom.on(LivekitClient.RoomEvent.LocalTrackPublished, (publication, participant) => {
             if (publication.track && publication.source === LivekitClient.Track.Source.ScreenShare) {
                 attachParticipantVideoTrack(publication.track, participant, publication.source);
+                setSharedScreen(publication.track.mediaStreamTrack, localCamera());
             }
         });
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.LocalTrackUnpublished, (publication) => {
             cleanupTileTrack('local', publication.source);
+            if (publication.source === LivekitClient.Track.Source.ScreenShare) setSharedScreen(null, localCamera());
         });
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
