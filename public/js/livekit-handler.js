@@ -585,6 +585,8 @@ async function applyStreamer(off) {
         // LiveKit points the camera's sender at the effect again whenever the effect restarts
         await camera.sender.replaceTrack(null);
         await screen.sender.replaceTrack(output);
+        // Your own screen tile shows what the others get
+        showLocalScreen(output);
         streamerMerged = { camera, screen };
         return;
     }
@@ -594,8 +596,16 @@ async function applyStreamer(off) {
     // Unpublished tracks have no sender any more
     if (merged.screen.sender && merged.screen.mediaStreamTrack.readyState === 'live') {
         await merged.screen.sender.replaceTrack(merged.screen.mediaStreamTrack);
+        showLocalScreen(merged.screen.mediaStreamTrack);
     }
     if (merged.camera.sender) await merged.camera.resumeUpstream();
+}
+
+function showLocalScreen(track) {
+    const video = document.querySelector('#tile_local_screen_share video');
+    if (!video || video.srcObject?.getVideoTracks?.()[0] === track) return;
+    video.srcObject = new MediaStream([track]);
+    video.play().catch(() => {});
 }
 
 onStreamerChange(() => syncStreamer());

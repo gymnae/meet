@@ -22,7 +22,7 @@ const EDGE = [0.2, 0.85];
 // Below this confidence a pixel counts fully as background for the blur
 const BLUR_KEEP_OUT = [0.15, 0.5];
 // Of each new mask, at least this share is taken; the rest comes from the masks before
-const MIN_TAKE = 0.45;
+const MIN_TAKE = 0.6;
 const DOWNSAMPLE = 4;
 const MAX_BLUR_RADIUS = 16;
 const MAX_TAPS = 1 + Math.ceil(MAX_BLUR_RADIUS / 2);
@@ -72,7 +72,7 @@ void main() {
     }
     c /= 256.0;
     float previous = texture(u_previous, uv).r;
-    float take = mix(${MIN_TAKE.toFixed(2)}, 1.0, smoothstep(0.1, 0.5, abs(c - previous)));
+    float take = mix(${MIN_TAKE.toFixed(2)}, 1.0, smoothstep(0.05, 0.3, abs(c - previous)));
     color = vec4(mix(previous, c, mix(1.0, take, u_history)), 0.0, 0.0, 1.0);
 }`;
 

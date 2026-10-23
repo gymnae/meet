@@ -545,6 +545,8 @@ video {
 #tile_local_camera video { transform: none; }
 #tile_local_camera.mirror-mode video { transform: scaleX(-1) !important; }
 #tile_local_camera.mirror-mode.screen-backdrop video { transform: none !important; }
+/* Streamer: the picture is the screen's shape, with the person at its right edge; show all of it */
+#tile_local_camera.screen-backdrop video { object-fit: contain !important; }
 .video-tile.video-muted video { display: none; }
 @media (max-width: 600px) and (min-height: 501px) {
     #tile_local_camera {

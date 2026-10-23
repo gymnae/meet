@@ -3,9 +3,9 @@
 // 1. Blur done by the platform (Chrome on Windows Studio Effects / ChromeOS reports a
 //    controllable `backgroundBlur` capability on the camera track). Costs the page nothing.
 // 2. Otherwise LiveKit's background processor: MediaPipe's selfie segmenter on the GPU, blur at
-//    a quarter of the resolution, one WebGL composite. On top of that, segmentation runs only on
-//    every 2nd frame and the mask is reused in between, and the cost per frame is watched: a
-//    device over budget steps down to less frequent masks and a smaller camera picture.
+//    a quarter of the resolution, one WebGL composite. Segmentation runs on every frame while the
+//    device keeps up, and the cost per frame is watched: a device over budget steps down to masks
+//    on every 2nd frame or less (reused in between) and a smaller camera picture.
 //    Nothing is turned off by itself: that would show the background the person chose to hide.
 //    The compositing is our own (background-compositor.js): soft, steady edges and moving backdrops.
 // Everything is self-hosted (see server.js) and loaded only once an effect is picked.
@@ -36,6 +36,7 @@ const BUDGET_MS = 10;
 const WINDOW_MS = 2000;
 const MIN_FPS_SHARE = 0.75;
 const LOAD_LEVELS = [
+    { segmentEvery: 1 },
     { segmentEvery: 2 },
     { segmentEvery: 3 },
     { segmentEvery: 3, height: 540 },
