@@ -24,6 +24,12 @@ import { initCapabilityChecks, refreshControlVisibility } from './capabilities.j
 // Backstop only. LiveKit allows 15 s for the signalling WebSocket and another 15 s for the
 // media connection; behind corporate proxies the fallback to TURN over TLS can need most of that.
 const INITIAL_CONNECT_TIMEOUT_MS = 40000;
+// A connect that fails before signalling is tried again, within the same backstop: such failures
+// are often passing (a dropped upgrade at a proxy, a server restart), and a reload used to fix them.
+const CONNECT_ATTEMPTS = 2;
+const CONNECT_RETRY_DELAY_MS = 1000;
+// A retry needs at least this much of the backstop left to be worth it
+const CONNECT_RETRY_MIN_MS = 8000;
 
 window.initiateCall = initiateCall;
 window.toggleMic = toggleMic;
@@ -401,20 +407,34 @@ async function initiateCall() {
             joinBtn.innerText = audience ? 'Starting audio…' : 'Starting audio and video…';
         });
         joinBtn.innerText = 'Connecting to the meeting server…';
-        let connectTimer;
-        try {
-            await Promise.race([
-                AppState.activeRoom.connect(connectionInfo.serverUrl, connectionInfo.token),
-                new Promise((resolve, reject) => {
-                    connectTimer = setTimeout(() => reject(new Error('INITIAL_CONNECT_TIMEOUT')), INITIAL_CONNECT_TIMEOUT_MS);
-                })
-            ]);
-        } catch (connectErr) {
-            connectErr.signalConnected = signalConnected;
-            connectErr.serverUrl = connectionInfo.serverUrl;
-            throw connectErr;
-        } finally {
-            clearTimeout(connectTimer);
+        const connectDeadline = Date.now() + INITIAL_CONNECT_TIMEOUT_MS;
+        for (let attempt = 1; ; attempt++) {
+            let connectTimer;
+            try {
+                await Promise.race([
+                    AppState.activeRoom.connect(connectionInfo.serverUrl, connectionInfo.token),
+                    new Promise((resolve, reject) => {
+                        connectTimer = setTimeout(() => reject(new Error('INITIAL_CONNECT_TIMEOUT')), connectDeadline - Date.now());
+                    })
+                ]);
+                break;
+            } catch (connectErr) {
+                // After signalling the media path failed, which a second try rarely changes; a refused
+                // token or the spent backstop would fail again the same way.
+                const retry = attempt < CONNECT_ATTEMPTS && !signalConnected && connectErr?.reasonName !== 'NotAllowed' &&
+                    connectErr?.message !== 'INITIAL_CONNECT_TIMEOUT' && connectDeadline - Date.now() > CONNECT_RETRY_MIN_MS;
+                if (!retry) {
+                    connectErr.signalConnected = signalConnected;
+                    connectErr.serverUrl = connectionInfo.serverUrl;
+                    connectErr.attempts = attempt;
+                    throw connectErr;
+                }
+                console.warn(`[Join] connect attempt ${attempt} failed (${connectErr?.name || 'Error'}${connectErr?.reasonName ? ': ' + connectErr.reasonName : ''}), trying again`);
+                joinBtn.innerText = 'Connecting again…';
+                await new Promise(resolve => setTimeout(resolve, CONNECT_RETRY_DELAY_MS));
+            } finally {
+                clearTimeout(connectTimer);
+            }
         }
         joinStage = 'session';
 
@@ -494,7 +514,7 @@ async function initiateCall() {
     } catch (err) {
         // Do not log the SDK error object: authentication failures may include
         // connection details that should not be exposed in browser logs.
-        console.error(`[Join] ${joinStage} initialization failed (${err?.name || 'Error'}${err?.reasonName ? ': ' + err.reasonName : ''}${joinStage === 'connect' ? (err?.signalConnected ? ', after signalling' : ', before signalling') : ''})`);
+        console.error(`[Join] ${joinStage} initialization failed (${err?.name || 'Error'}${err?.reasonName ? ': ' + err.reasonName : ''}${joinStage === 'connect' ? (err?.signalConnected ? ', after signalling' : ', before signalling') + `, ${err?.attempts || 1} attempt(s)` : ''})`);
         terminateSession(false);
         restoreJoinGate();
 
@@ -556,9 +576,10 @@ async function describeConnectFailure(err) {
     if (!err?.serverUrl || !(await isHostReachable(err.serverUrl))) {
         return `Could not reach the meeting server (${host}). Your network or a firewall may block it, or you may be offline. Check your connection, try another network, or ask your IT team to allow ${host}.`;
     }
-    // The host answered over HTTPS but the WebSocket failed, stalled or timed out:
-    // the typical footprint of a firewall or proxy that blocks WebSockets.
-    return `Your network seems to block the live connection to the meeting server (${host}). This usually means a corporate firewall or proxy blocks secure WebSocket (WSS) traffic. Try another network, or ask your IT team to allow WebSockets to ${host}.`;
+    // The host answered over HTTPS but the WebSocket failed, stalled or timed out. A firewall or proxy
+    // that blocks WebSockets looks like this, but so does a passing hiccup at the server or its proxy:
+    // say which, only as a possibility.
+    return `Could not open the live connection to the meeting server (${host}), although the server itself answers. Try again in a moment. If it keeps failing on this network, a firewall or proxy may block secure WebSocket (WSS) traffic: try another network, or ask your IT team to allow WebSockets to ${host}.`;
 }
 
 function restoreJoinGate() {
