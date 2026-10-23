@@ -2,7 +2,7 @@ import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js'
 import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints, setMicMonitorMuted, setPreferredMicDeviceId } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
 import { renderMessage, renderFile } from './chat.js';
-import { applyBackground, buildBackgroundPicker } from './background-effects.js';
+import { applyBackground, buildBackgroundPicker, streamerOutput, onStreamerChange } from './background-effects.js';
 
 export function ensureParticipantTile(participant, streamSource = 'camera') {
     const isLocalUser = participant.isLocal || (AppState.activeRoom && participant.identity === AppState.activeRoom.localParticipant?.identity);
@@ -141,6 +141,8 @@ export async function renegotiateVideoCodec(newCodec) {
     AppState.currentPublishedCodec = newCodec;
 
     try {
+        // Republishing gives new senders; the Streamer picture is put back on them afterwards
+        await syncStreamer({ off: true });
         const cameraPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
         if (cameraPub && cameraPub.videoTrack && !AppState.camMuted) {
             const track = cameraPub.videoTrack;
@@ -164,6 +166,7 @@ export async function renegotiateVideoCodec(newCodec) {
         console.error("[Codec Engine] Renegotiation error:", err);
         AppState.currentPublishedCodec = oldCodec;
     } finally {
+        syncStreamer();
         setTimeout(() => {
             AppState.isRenegotiating = false;
         }, 200);
@@ -424,6 +427,8 @@ export async function toggleCam() {
                 AppState.camMuted = true;
                 setDockLabel(btn, "Start");
                 btn.classList.add('active-off'); 
+                // The screen goes out on its own again before the picture made from the camera ends
+                await syncStreamer({ off: true });
                 
                 const cameraPub = AppState.activeRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
                 if (cameraPub && cameraPub.videoTrack) {
@@ -543,6 +548,7 @@ export async function toggleCam() {
 /** Marks the camera as off in state and on the dock button, and clears the local preview. */
 export function markCamOff() {
     AppState.camMuted = true;
+    syncStreamer({ off: true });
     const btn = document.getElementById('btnCam');
     if (btn) {
         setDockLabel(btn, "Start");
@@ -552,6 +558,47 @@ export function markCamOff() {
     if (localTile) localTile.querySelectorAll('video').forEach(v => { v.srcObject = null; v.remove(); });
     recalculateLayout();
 }
+
+// --- Streamer: one picture of screen and person, sent in place of both ----------------------
+// The screen share's sender carries the camera's processed picture (the screen, the person in the
+// corner, at the screen's size), so others get it large and sharp, laid out as a shared screen.
+// The camera stops sending (paused upstream: others see it as muted) but keeps running here,
+// since the picture is made from it.
+
+let streamerMerged = null;   // { camera, screen } while the screen share carries the picture
+let streamerQueue = Promise.resolve();
+
+/** Sends the Streamer picture when it is on, else camera and screen as usual. off: always as usual. */
+export function syncStreamer({ off = false } = {}) {
+    streamerQueue = streamerQueue.then(() => applyStreamer(off))
+        .catch(err => console.error('[Streamer] Switching what is sent failed', err));
+    return streamerQueue;
+}
+
+async function applyStreamer(off) {
+    const local = AppState.activeRoom?.localParticipant;
+    const camera = off || AppState.camMuted ? null : local?.getTrackPublication(LivekitClient.Track.Source.Camera)?.videoTrack;
+    const screen = local?.getTrackPublication(LivekitClient.Track.Source.ScreenShare)?.videoTrack;
+    const output = streamerOutput(camera);
+    if (output && camera.sender && screen?.sender) {
+        await camera.pauseUpstream();
+        // LiveKit points the camera's sender at the effect again whenever the effect restarts
+        await camera.sender.replaceTrack(null);
+        await screen.sender.replaceTrack(output);
+        streamerMerged = { camera, screen };
+        return;
+    }
+    if (!streamerMerged) return;
+    const merged = streamerMerged;
+    streamerMerged = null;
+    // Unpublished tracks have no sender any more
+    if (merged.screen.sender && merged.screen.mediaStreamTrack.readyState === 'live') {
+        await merged.screen.sender.replaceTrack(merged.screen.mediaStreamTrack);
+    }
+    if (merged.camera.sender) await merged.camera.resumeUpstream();
+}
+
+onStreamerChange(() => syncStreamer());
 
 export async function toggleScreenShare() {
     if (!AppState.activeRoom) return;

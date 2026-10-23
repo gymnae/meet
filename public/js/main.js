@@ -305,9 +305,16 @@ async function initiateCall() {
             : Promise.resolve(true);
 
         // --- LiveKit Hooks ---
+        // A camera that stops sending (Streamer sends its picture as the screen) shows the avatar,
+        // not its last frame
+        const markVideoMuted = (participant, publication) => {
+            if (participant.isLocal || publication.source !== LivekitClient.Track.Source.Camera) return;
+            document.getElementById(`tile_${participant.identity}_camera`)?.classList.toggle('video-muted', publication.isMuted);
+        };
         AppState.activeRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
             if (track.kind === LivekitClient.Track.Kind.Video) {
                 attachParticipantVideoTrack(track, participant, publication.source);
+                markVideoMuted(participant, publication);
             } else if (track.kind === LivekitClient.Track.Kind.Audio) {
                 if (audience) {
                     // Plain media element: phones keep it playing with the screen off,
@@ -351,6 +358,9 @@ async function initiateCall() {
             cleanupTileTrack('local', publication.source);
             if (publication.source === LivekitClient.Track.Source.ScreenShare) setSharedScreen(null, localCamera());
         });
+
+        AppState.activeRoom.on(LivekitClient.RoomEvent.TrackMuted, (publication, participant) => markVideoMuted(participant, publication));
+        AppState.activeRoom.on(LivekitClient.RoomEvent.TrackUnmuted, (publication, participant) => markVideoMuted(participant, publication));
 
         AppState.activeRoom.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
             handleIncomingDataPacket(payload, participant);

@@ -9,6 +9,9 @@
 // - leaves the person out of the blur, so no halo of their colours around them,
 // - draws backdrops that move (video, animated picture, a shared screen), uploading a frame only
 //   when the backdrop has a new one.
+// - can show the person small in the bottom-right corner over the backdrop, as streamers do over a
+//   game (the shared screen). Where they are in the camera picture is read back from the mask a few
+//   times a second, without waiting on the GPU, so the corner keeps them in frame.
 // The extra work runs on the small mask (256×144) and the quarter-size blur copy, so it costs
 // about what LiveKit's mask blur did at 640×360.
 
@@ -25,6 +28,18 @@ const MAX_BLUR_RADIUS = 16;
 const MAX_TAPS = 1 + Math.ceil(MAX_BLUR_RADIUS / 2);
 // Behind a backdrop that does not fill the picture (a screen shown whole)
 const MATTE = [0.07, 0.07, 0.08];
+// In the corner: the person (top of the head to the bottom of the camera picture) is this share of
+// the picture's height, at most this much enlarged, and this far from the right edge.
+const CORNER_HEIGHT = 0.3;
+const CORNER_MAX_SCALE = 0.7;
+const CORNER_MARGIN = 0.03;
+// Room left above the head
+const CORNER_HEADROOM = 0.05;
+// How often the mask is read back, and how quickly the corner follows (time constant)
+const CORNER_READ_MS = 200;
+const CORNER_EASE_MS = 400;
+// With the person in the corner the picture takes the backdrop's size, up to this
+const CORNER_MAX_OUTPUT = [1920, 1080];
 
 const VERTEX = `#version 300 es
 in vec2 position;
@@ -110,6 +125,7 @@ uniform sampler2D u_background;
 uniform int u_mode;        // 0: frame only, 1: blur, 2: backdrop
 uniform vec4 u_fit;        // backdrop: scale (xy) and offset (zw) from picture to backdrop coordinates
 uniform vec3 u_matte;
+uniform vec4 u_corner;     // person in the corner: scale (xy), x in the picture, x in the camera picture
 out vec4 color;
 void main() {
     vec3 frame = texture(u_frame, uv).rgb;
@@ -117,7 +133,14 @@ void main() {
         color = vec4(frame, 1.0);
         return;
     }
-    float person = smoothstep(${EDGE[0]}, ${EDGE[1]}, texture(u_mask, uv).r);
+    vec2 q = uv;
+    if (u_corner.x > 0.0) {
+        // The bottom of the camera picture stays on the bottom edge
+        q = vec2(u_corner.w + (uv.x - u_corner.z) / u_corner.x, 1.0 - (1.0 - uv.y) / u_corner.y);
+        frame = texture(u_frame, q).rgb;
+    }
+    bool onCamera = q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0;
+    float person = onCamera ? smoothstep(${EDGE[0]}, ${EDGE[1]}, texture(u_mask, q).r) : 0.0;
     vec3 background;
     if (u_mode == 1) {
         vec4 blurred = texture(u_background, uv);
@@ -156,7 +179,8 @@ function gaussianKernel(radius) {
  * Sets up the compositor on the canvas's WebGL2 context, or returns undefined without one.
  * Same methods as LiveKit's setupWebGL, plus setBackgroundSource for backdrops that move:
  * objects with `image` (something texImage2D takes, or null while there is none), `width`,
- * `height`, `version` (changes with each new frame) and `fit` ('cover' or 'contain').
+ * `height`, `version` (changes with each new frame), `fit` ('cover' or 'contain') and optionally
+ * `corner` (true: the person is shown small in the bottom-right corner).
  */
 export function createCompositor(canvas) {
     const gl = canvas.getContext('webgl2');
@@ -196,7 +220,7 @@ export function createCompositor(canvas) {
     const maskProgram = program(MASK_SHADER, ['u_confidence', 'u_previous', 'u_texel', 'u_history']);
     const prepareProgram = program(PREPARE_SHADER, ['u_frame', 'u_mask', 'u_texel']);
     const blurProgram = program(BLUR_SHADER, ['u_source', 'u_step', 'u_weights', 'u_offsets', 'u_taps']);
-    const compositeProgram = program(COMPOSITE_SHADER, ['u_frame', 'u_mask', 'u_background', 'u_mode', 'u_fit', 'u_matte']);
+    const compositeProgram = program(COMPOSITE_SHADER, ['u_frame', 'u_mask', 'u_background', 'u_mode', 'u_fit', 'u_matte', 'u_corner']);
 
     // Own vertex array, so the attribute state of MediaPipe's passes stays untouched
     const vao = gl.createVertexArray();
@@ -269,6 +293,17 @@ export function createCompositor(canvas) {
     let sourceVersion = null;
     let sourceShown = null;      // size and fit of its frame in the texture
 
+    // Where the person is in the camera picture (0..1, top down): read from the mask, and eased
+    const personTarget = { top: 0.2, left: 0.3, right: 0.7 };
+    const personShown = { ...personTarget };
+    let personShownAt = 0;
+    let readBuffer = null;
+    let readSize = 0;
+    let readFence = null;
+    let readWidth = 0;
+    let readHeight = 0;
+    let lastReadAt = -Infinity;
+
     function begin() {
         gl.disable(gl.BLEND);
         gl.disable(gl.DEPTH_TEST);
@@ -318,7 +353,93 @@ export function createCompositor(canvas) {
         draw(maskProgram, next, width, height);
         maskIndex = 1 - maskIndex;
         hasMask = true;
+        if (source?.corner) startMaskRead(next, width, height);
         end();
+    }
+
+    // Copies the mask into a buffer; finishMaskRead picks it up once the GPU is done, so nothing waits
+    function startMaskRead(mask, width, height) {
+        const now = performance.now();
+        if (readFence || now - lastReadAt < CORNER_READ_MS) return;
+        lastReadAt = now;
+        readBuffer ??= gl.createBuffer();
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, readBuffer);
+        if (readSize !== width * height * 4) {
+            readSize = width * height * 4;
+            gl.bufferData(gl.PIXEL_PACK_BUFFER, readSize, gl.STREAM_READ);
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, mask.framebuffer);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+        // MediaPipe uses this context too: leave nothing bound for it to read into
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+        readFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        readWidth = width;
+        readHeight = height;
+    }
+
+    function finishMaskRead() {
+        if (!readFence || gl.getSyncParameter(readFence, gl.SYNC_STATUS) !== gl.SIGNALED) return;
+        gl.deleteSync(readFence);
+        readFence = null;
+        const pixels = new Uint8Array(readSize);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, readBuffer);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, pixels);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+        locatePerson(pixels, readWidth, readHeight);
+    }
+
+    // Top of the head, and the sides of the person without the odd stray pixel or raised hand
+    function locatePerson(pixels, width, height) {
+        const columns = new Uint32Array(width);
+        const minInRow = Math.max(2, Math.round(width * 0.01));
+        let top = -1;
+        let total = 0;
+        for (let y = 0; y < height; y++) {
+            let inRow = 0;
+            for (let x = 0, i = y * width * 4; x < width; x++, i += 4) {
+                if (pixels[i] >= 128) {
+                    columns[x]++;
+                    inRow++;
+                }
+            }
+            if (top < 0 && inRow >= minInRow) top = y;
+            total += inRow;
+        }
+        // Nobody there (stepped away): the corner stays where it was
+        if (top < 0 || total < width * height * 0.005) return;
+        const at = (share) => {
+            let sum = 0;
+            for (let x = 0; x < width; x++) {
+                sum += columns[x];
+                if (sum >= total * share) return x;
+            }
+            return width - 1;
+        };
+        personTarget.top = top / height;
+        personTarget.left = at(0.05) / width;
+        personTarget.right = (at(0.95) + 1) / width;
+    }
+
+    // Scale (x and y), x in the picture and x in the camera picture for the person in the corner.
+    // The picture may have another shape than the camera's, so x is scaled to keep the person's.
+    function cornerMapping(width, height, frame) {
+        const now = performance.now();
+        const ease = personShownAt ? Math.min(1, (now - personShownAt) / CORNER_EASE_MS) : 1;
+        personShownAt = now;
+        for (const key in personShown) personShown[key] += (personTarget[key] - personShown[key]) * ease;
+        const { top, left, right } = personShown;
+        const tall = Math.min(1, Math.max(CORNER_HEIGHT / CORNER_MAX_SCALE, 1 - top + CORNER_HEADROOM));
+        const scale = CORNER_HEIGHT / tall;
+        const scaleX = scale * (frame.displayWidth / frame.displayHeight) / (width / height);
+        return [scaleX, scale, 1 - CORNER_MARGIN - scaleX * (right - left) / 2, (left + right) / 2];
+    }
+
+    /** Size of the picture for a camera frame of this size: the backdrop's with the person in the corner. */
+    function outputSize(frameWidth, frameHeight) {
+        if (!source?.corner || !source.width || !source.height) return [frameWidth, frameHeight];
+        const shrink = Math.min(1, CORNER_MAX_OUTPUT[0] / source.width, CORNER_MAX_OUTPUT[1] / source.height);
+        // Encoders want even sizes
+        return [2 * Math.round(source.width * shrink / 2), 2 * Math.round(source.height * shrink / 2)];
     }
 
     function blurBackground(width, height) {
@@ -370,6 +491,7 @@ export function createCompositor(canvas) {
         let mode = backgroundDisabled ? 0 : 2;
         let background = backgroundTexture;
         let backdrop = null;
+        let corner = [0, 0, 0, 0];
         if (mode && blurRadius) {
             background = blurBackground(width, height);
             mode = 1;
@@ -382,6 +504,10 @@ export function createCompositor(canvas) {
             }
             // Between frames, and while it is paused, the last frame stays
             backdrop = sourceShown;
+            if (source.corner) {
+                finishMaskRead();
+                corner = cornerMapping(width, height, frame);
+            }
         } else if (mode) {
             backdrop = picture;
         }
@@ -394,6 +520,7 @@ export function createCompositor(canvas) {
         // No backdrop: every point falls outside it, onto the matte
         gl.uniform4fv(compositeProgram.u_fit, backdrop ? fitFor(width, height, backdrop) : [0, 0, -1, -1]);
         gl.uniform3fv(compositeProgram.u_matte, MATTE);
+        gl.uniform4fv(compositeProgram.u_corner, corner);
         draw(compositeProgram, null, width, height);
         end();
     }
@@ -413,6 +540,7 @@ export function createCompositor(canvas) {
         source = next || null;
         sourceVersion = null;
         sourceShown = null;
+        personShownAt = 0;
     }
 
     function setBlurRadius(radius) {
@@ -430,11 +558,13 @@ export function createCompositor(canvas) {
         gl.deleteShader(vertexShader);
         textures.forEach(t => gl.deleteTexture(t));
         framebuffers.forEach(f => gl.deleteFramebuffer(f));
+        if (readFence) gl.deleteSync(readFence);
+        if (readBuffer) gl.deleteBuffer(readBuffer);
         gl.deleteBuffer(quad);
         gl.deleteVertexArray(vao);
         source = null;
         picture = null;
     }
 
-    return { renderFrame, updateMask, setBackgroundImage, setBackgroundSource, setBlurRadius, setBackgroundDisabled, cleanup };
+    return { renderFrame, updateMask, setBackgroundImage, setBackgroundSource, setBlurRadius, setBackgroundDisabled, outputSize, cleanup };
 }

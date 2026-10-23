@@ -11,7 +11,8 @@
 // Everything is self-hosted (see server.js) and loaded only once an effect is picked.
 // People can add their own pictures, animated pictures and short videos. They stay in this browser
 // (IndexedDB), filed under the name they join with, and never go to the server; only the video
-// they appear in does. While someone shares their screen, it can be their backdrop too.
+// they appear in does. While someone shares their screen, it can be their backdrop too ("Streamer"):
+// they show small in a corner of it, and that one picture goes out in place of camera and screen.
 
 import { showToast } from './ui.js';
 import { isIOS } from './state.js';
@@ -53,7 +54,7 @@ const PRISM_CANVAS = { width: 1280, height: 720, scale: 1, smooth: true };
 export const BACKGROUNDS = [
     { id: 'none', name: 'No effect', short: 'None' },
     { id: 'blur', name: 'Blur', short: 'Blur' },
-    { id: 'screen', name: 'Your screen while you share it, blur otherwise', short: 'Screen', screen: true },
+    { id: 'screen', name: 'Streamer: while you share, your screen with you in the corner, sent as one picture; blur otherwise', short: 'Streamer', screen: true },
     { id: 'city', name: 'Night city', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawCity },
     { id: 'grid', name: 'Neon grid', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawGrid },
     { id: 'wall', name: 'Quiet wall', theme: 'pixel', canvas: PIXEL_CANVAS, draw: drawWall },
@@ -174,7 +175,10 @@ let queue = Promise.resolve();
  * could not start, in which case the caller must not send the camera.
  */
 export function applyBackground(track) {
-    const run = queue.then(() => applyNow(track, getBackgroundChoice())).finally(() => resumePreview(track));
+    const run = queue.then(() => applyNow(track, getBackgroundChoice())).finally(() => {
+        resumePreview(track);
+        markScreenBackdrop(track);
+    });
     queue = run.catch(() => {});
     return run;
 }
@@ -240,7 +244,7 @@ async function effectOptions(id) {
     let imagePath;
     if (id === 'screen') {
         const screen = liveScreen();
-        imagePath = backdropPath(`screen:${screen.id}`, () => new VideoBackdrop(new MediaStream([screen]), { fit: 'contain', maxFps: SCREEN_BACKDROP_FPS }));
+        imagePath = backdropPath(`screen:${screen.id}`, () => new VideoBackdrop(new MediaStream([screen]), { fit: 'contain', maxFps: SCREEN_BACKDROP_FPS, corner: true }));
     } else if (id.startsWith(CUSTOM_PREFIX)) {
         const record = await customRecord(id);
         if (record.kind === 'video') {
@@ -281,8 +285,10 @@ function releaseBackdrops(keepPath) {
 
 // A looping video file, or the shared screen (a MediaStream)
 class VideoBackdrop {
-    constructor(src, { fit = 'cover', maxFps = 0 } = {}) {
+    constructor(src, { fit = 'cover', maxFps = 0, corner = false } = {}) {
         this.fit = fit;
+        // The person small in the bottom-right corner, as over a game
+        this.corner = corner;
         this.minInterval = maxFps ? 1000 / maxFps : 0;
         this.lastTime = -1;
         this.lastTake = 0;
@@ -393,6 +399,28 @@ export function setSharedScreen(track, cameraTrack) {
     }
 }
 
+/**
+ * The camera's processed track while it shows the shared screen with the person in the corner
+ * ("Streamer"), or null. That track is what goes out in place of camera and screen.
+ */
+export function streamerOutput(track) {
+    const processor = track?.getProcessor?.();
+    const shown = !!liveScreen() && processor?.transformer?.options?.imagePath?.startsWith('backdrop:screen:');
+    return shown && processor.processedTrack?.readyState === 'live' ? processor.processedTrack : null;
+}
+
+let streamerListener = null;
+/** Called after every change of effect, to send the Streamer picture or stop sending it. */
+export function onStreamerChange(listener) {
+    streamerListener = listener;
+}
+
+function markScreenBackdrop(track) {
+    // A mirrored self-view would show the screen back to front and the corner on the left
+    document.getElementById('tile_local_camera')?.classList.toggle('screen-backdrop', !!streamerOutput(track));
+    streamerListener?.();
+}
+
 let processorModule;
 function loadProcessorModule() {
     processorModule ??= import(PROCESSOR_MODULE).catch(err => {
@@ -486,8 +514,9 @@ function thriftyTransformer(Base) {
                     });
                 }
                 // Resizing a WebGL canvas clears it, so only do it when the size changes
-                if (this.canvas.width !== frame.displayWidth) this.canvas.width = frame.displayWidth;
-                if (this.canvas.height !== frame.displayHeight) this.canvas.height = frame.displayHeight;
+                const [width, height] = this.gl?.outputSize?.(frame.displayWidth, frame.displayHeight) ?? [frame.displayWidth, frame.displayHeight];
+                if (this.canvas.width !== width) this.canvas.width = width;
+                if (this.canvas.height !== height) this.canvas.height = height;
                 this.drawFrame(frame);
                 controller.enqueue(new VideoFrame(this.canvas, { timestamp: frame.timestamp }));
                 this.onCost?.(performance.now() - start);

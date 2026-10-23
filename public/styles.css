@@ -544,6 +544,8 @@ video {
 #tile_local_camera .name-tag { color: var(--role-brand-text); border-color: rgb(255 0 127 / .6); }
 #tile_local_camera video { transform: none; }
 #tile_local_camera.mirror-mode video { transform: scaleX(-1) !important; }
+#tile_local_camera.mirror-mode.screen-backdrop video { transform: none !important; }
+.video-tile.video-muted video { display: none; }
 @media (max-width: 600px) and (min-height: 501px) {
     #tile_local_camera {
         width: 110px !important; height: 85px !important;
