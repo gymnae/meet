@@ -13,6 +13,7 @@
 - **Chat that keeps formatting** pasted from Docs, Word or code editors, plus **quick polls** and file sharing up to 200 MB
 - **Gone when you're gone:** chat, files and polls are deleted once everyone has left. Disappearing messages are one click away
 - Screen sharing, local recording, reactions, raised hands, sound controls and "Hear yourself" monitoring
+- **Resize anything:** drag the chat wider, any video tile larger, your own preview and the speaker strip
 - Two themes, **Pixel** and **Prism**, both mobile-first
 - **Works on locked-down networks:** the LiveKit client is self-hosted, so no CDN is needed, and failed joins say exactly what was blocked
 

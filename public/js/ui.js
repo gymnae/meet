@@ -207,6 +207,9 @@ export function recalculateLayout() {
 
     if (targetMaximizeId) {
         if (!grid.classList.contains('has-maximized')) grid.classList.add('has-maximized');
+        grid.classList.remove('can-span');
+        setStyle(grid, 'gridAutoFlow', '');
+        setStyle(grid, 'gridAutoRows', '');
         
         const gridTiles = rawTiles.sort((a, b) => {
             if (a.id === targetMaximizeId) return -1;
@@ -253,7 +256,13 @@ export function recalculateLayout() {
         if (grid.classList.contains('has-maximized')) grid.classList.remove('has-maximized');
 
         const gridTiles = rawTiles.filter(t => t.id !== 'tile_local_camera');
-        const totalTiles = Math.max(1, gridTiles.length);
+        // A tile someone made larger takes span × span cells; with one tile there is nothing to size
+        const canSpan = gridTiles.length > 1;
+        grid.classList.toggle('can-span', canSpan);
+        const spanOf = (tile) => canSpan ? (AppState.tileSpans.get(tile.id) || 1) : 1;
+        const cells = gridTiles.reduce((sum, tile) => sum + spanOf(tile) ** 2, 0);
+        const widest = gridTiles.reduce((max, tile) => Math.max(max, spanOf(tile)), 1);
+        const totalTiles = Math.max(1, cells);
 
         let cols = Math.ceil(Math.sqrt(totalTiles));
         let rows = Math.ceil(totalTiles / cols);
@@ -265,14 +274,21 @@ export function recalculateLayout() {
             rows = Math.ceil(Math.sqrt(totalTiles / aspect));
             cols = Math.ceil(totalTiles / rows);
         }
+        cols = Math.max(cols, widest);
+        rows = Math.max(rows, widest);
 
         setStyle(grid, 'gridTemplateColumns', `repeat(${cols}, minmax(0px, 1fr))`);
         setStyle(grid, 'gridTemplateRows', `repeat(${rows}, minmax(0px, 1fr))`);
+        // Large tiles can leave gaps: later tiles fill them, and any extra row shares the height
+        setStyle(grid, 'gridAutoFlow', 'row dense');
+        setStyle(grid, 'gridAutoRows', 'minmax(0px, 1fr)');
 
         // Includes the local camera tile.
         rawTiles.forEach(tile => {
-            setStyle(tile, 'gridColumn', 'auto');
-            setStyle(tile, 'gridRow', 'auto');
+            const span = Math.min(spanOf(tile), cols, rows);
+            const place = span > 1 ? `span ${span}` : 'auto';
+            setStyle(tile, 'gridColumn', place);
+            setStyle(tile, 'gridRow', place);
         });
     }
 

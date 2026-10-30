@@ -264,6 +264,7 @@ Your floating tile has a magenta frame and `elev-2`. The resize handle is a pixe
 - Desktop: a 340 px side panel. The video grid shrinks to make room, so no video is covered.
 - Phones: a bottom sheet at 55 % of the height with a grabber bar.
 - Header: "Transmissions" in cyan, with "Stays until all leave" beneath in mono, or "Chat 1 min · files 10 min" when disappearing messages are on. The clock button beside it turns them on and off; it is filled yellow while on (time).
+- The drawer's left edge can be dragged (desktop) between 280 and 720 px, never past 60% of the window; arrow keys work on it too.
 - Polls are cards with a cyan frame. Your pick is magenta, the result bars cyan.
 - Bubbles have a 4 px left bar: cyan for others, magenta for you, yellow when pinned.
 - TTL pills are yellow mono with a clock mask. They turn red in the last 10 seconds for messages and the last 30 for files.

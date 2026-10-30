@@ -404,7 +404,8 @@ body.is-recording .rec-chip { display: inline-flex; }
 @media (max-width: 768px) { .grid { gap: var(--s-2); } }
 
 /* Desktop: chat docks as a side panel — grid shrinks, videos stay visible */
-@media (min-width: 769px) { body.chat-open .grid { width: calc(100% - 352px); } }
+/* --chat-w is set by dragging the drawer's edge (resize.js); the drawer never takes more than 60% */
+@media (min-width: 769px) { body.chat-open .grid { width: calc(100% - min(var(--chat-w, 340px), 60vw) - 12px); } }
 /* Mobile: chat is a bottom sheet — videos remain visible above it */
 @media (max-width: 768px) { body.chat-open .grid { height: calc(100% - 55dvh); } }
 
@@ -612,6 +613,59 @@ video {
 body.gutter-dragging { cursor: col-resize; user-select: none; }
 body.gutter-dragging .video-tile { pointer-events: none; }
 
+/* chat drawer: drag its left edge to make it wider (desktop) */
+.chat-resize-handle {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    width: 12px;
+    z-index: 1;
+    cursor: col-resize;
+    touch-action: none;
+}
+.chat-resize-handle::after {
+    content: "";
+    position: absolute; top: 50%; left: 2px;
+    width: 4px; height: 48px;
+    transform: translateY(-50%);
+    background: var(--role-info);
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease-out);
+}
+.chat-resize-handle:hover::after, .chat-resize-handle:focus-visible::after,
+body.chat-resizing .chat-resize-handle::after { opacity: 1; }
+.chat-resize-handle:focus-visible { outline: none; }
+body.chat-resizing { cursor: col-resize; user-select: none; }
+body.chat-resizing :is(.video-tile, .chat-stream) { pointer-events: none; }
+@media (max-width: 768px) { .chat-resize-handle { display: none; } }
+
+/* other people's tiles in the grid: drag the corner to make one larger (1, 2 or 3 cells) */
+.tile-resize-handle {
+    display: none;
+    position: absolute; right: 0; bottom: 0;
+    width: 24px; height: 24px;
+    z-index: var(--z-handle);
+    cursor: nwse-resize;
+    touch-action: none;
+    /* pixel staircase triangle, mirrored from the PiP handle */
+    background:
+        linear-gradient(var(--role-info), var(--role-info)) 100% 100% / 24px 4px no-repeat,
+        linear-gradient(var(--role-info), var(--role-info)) 100% calc(100% - 4px) / 20px 4px no-repeat,
+        linear-gradient(var(--role-info), var(--role-info)) 100% calc(100% - 8px) / 16px 4px no-repeat,
+        linear-gradient(var(--role-info), var(--role-info)) 100% calc(100% - 12px) / 12px 4px no-repeat,
+        linear-gradient(var(--role-info), var(--role-info)) 100% calc(100% - 16px) / 8px 4px no-repeat,
+        linear-gradient(var(--role-info), var(--role-info)) 100% calc(100% - 20px) / 4px 4px no-repeat;
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease-out);
+}
+.tile-resize-handle::after { content: ""; position: absolute; inset: -10px; }   /* 44px hit area */
+.grid.can-span .tile-resize-handle { display: block; }
+.video-tile:hover .tile-resize-handle, .tile-resize-handle:focus-visible,
+body.tile-resizing .tile-resize-handle { opacity: 1; }
+.tile-resize-handle:focus-visible { outline: 2px solid var(--role-info); outline-offset: 2px; }
+@media (hover: none) { .tile-resize-handle { opacity: .7; } }
+body.tile-resizing { cursor: nwse-resize; user-select: none; }
+body.tile-resizing .video-tile { pointer-events: none; }
+body.tile-resizing .video-tile .tile-resize-handle { pointer-events: auto; }
+
 /* --------------------------------------------------------------------------
    6. Menus (mic, camera, reactions)
    -------------------------------------------------------------------------- */
@@ -705,8 +759,8 @@ body.gutter-dragging .video-tile { pointer-events: none; }
     overflow-y: auto;
     overscroll-behavior: contain;
 }
-/* keep clear of the open chat drawer (340px wide, 10px inset) */
-@media (min-width: 769px) { body.chat-open #soundMenu { right: calc(350px + var(--s-2)); } }
+/* keep clear of the open chat drawer (--chat-w wide, 10px inset) */
+@media (min-width: 769px) { body.chat-open #soundMenu { right: calc(min(var(--chat-w, 340px), 60vw) + 10px + var(--s-2)); } }
 .sound-section { display: flex; flex-direction: column; gap: var(--s-2); }
 .sound-section + .sound-section { padding-top: var(--s-3); border-top: 1px solid var(--line); }
 .sound-heading {
@@ -845,7 +899,7 @@ body.gutter-dragging .video-tile { pointer-events: none; }
     display: none;
     position: absolute;
     top: 10px; right: 10px; bottom: 10px;
-    width: 340px; max-width: 100%;
+    width: min(var(--chat-w, 340px), 60vw); max-width: 100%;
     flex-direction: column;
     overflow: hidden;
     background: var(--surface-1);
