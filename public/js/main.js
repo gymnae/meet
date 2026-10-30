@@ -8,7 +8,8 @@ import {
     broadcastCodecPreference, evaluateAndNegotiateCodec, markCamOff
 } from './livekit-handler.js';
 import { applyBackground, setSharedScreen } from './background-effects.js';
-import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload } from './chat.js';
+import { initChatEngine, toggleChat, syncRoomTransmissions, handleChatSubmit, handleFileUpload, toggleDisappearing, setDisappearing } from './chat.js';
+import { openPollDialog } from './polls.js';
 import {
     normalizeOutgoingMicTrack,
     attachNormalizedRemoteAudio, detachNormalizedRemoteAudio, getMicConstraints
@@ -42,6 +43,8 @@ window.toggleFullscreen = toggleFullscreen;
 window.terminateSession = terminateSession;
 window.openShareDialog = openShareDialog;
 window.handleChatSubmit = handleChatSubmit;
+window.toggleDisappearing = toggleDisappearing;
+window.openPollDialog = openPollDialog;
 window.handleFileUpload = handleFileUpload;
 window.toggleRecording = toggleRecording;
 window.toggleSoundMenu = toggleSoundMenu;
@@ -202,6 +205,7 @@ async function initiateCall() {
             AppState.roomName = roomName;
             // Only a protected room's password belongs in the links people share.
             AppState.roomPassword = connectionInfo.protected ? password : '';
+            setDisappearing(!!connectionInfo.disappearing);
         }
 
         document.body.classList.add('in-session');

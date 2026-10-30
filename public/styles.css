@@ -908,6 +908,10 @@ body.gutter-dragging .video-tile { pointer-events: none; }
 }
 .chat-close-btn { color: var(--text-2); background: transparent; }
 .chat-close-btn:hover { color: var(--text-1); background: var(--surface-3); }
+/* Disappearing messages: time is yellow (design.md rule 2) */
+.chat-ttl-btn { margin-left: auto; }
+.chat-ttl-btn[aria-pressed="true"] { color: var(--ink); background: var(--role-time); }
+.chat-ttl-btn[aria-pressed="true"]:hover { color: var(--ink); background: var(--text-1); }
 .chat-clip-btn { color: var(--role-info); background: var(--surface-2); border-color: var(--line-strong); }
 .chat-clip-btn:hover { background: var(--surface-3); border-color: var(--role-info); }
 .chat-send-btn { color: var(--ink); background: var(--role-brand); border-color: var(--role-brand); }
@@ -968,12 +972,35 @@ body.gutter-dragging .video-tile { pointer-events: none; }
 .chat-bubble.pinned .ttl-pill::before { -webkit-mask-image: var(--mask-pin); mask-image: var(--mask-pin); }
 .ttl-pill.urgent { color: var(--role-danger); background: rgb(255 59 92 / .1); border-color: rgb(255 59 92 / .45); }
 
-.chat-body { width: 100%; word-break: break-word; overflow-wrap: anywhere; }
+/* pre-wrap keeps the line breaks and indentation people typed or pasted */
+.chat-body { width: 100%; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+.chat-body strong { font-weight: 700; color: var(--text-1); }
+.chat-inline-code, .chat-code {
+    font: var(--fs-small)/var(--lh-body) var(--font-mono);
+    color: var(--text-1);
+    background: var(--void);
+}
+.chat-inline-code { padding: 0 var(--s-1); border: 1px solid var(--line); }
+.chat-code {
+    margin: var(--s-1) 0;
+    padding: var(--s-2);
+    overflow-x: auto;
+    white-space: pre;
+    border-left: 2px solid var(--line-strong);
+    scrollbar-width: thin;
+}
+.chat-quote {
+    display: block;
+    padding-left: var(--s-2);
+    color: var(--text-2);
+    border-left: 2px solid var(--line-strong);
+}
 .chat-link { color: var(--role-info); text-decoration: underline; text-underline-offset: 2px; word-break: break-all; overflow-wrap: anywhere; }
 .chat-link:hover { color: var(--text-1); }
 .chat-bubble.self .chat-link { color: var(--role-brand-text); }
 
 .chat-img-wrap, .file-img-wrap {
+    display: block;
     margin-top: 6px; max-width: 100%;
     overflow: hidden;
     background: var(--void);
@@ -1034,7 +1061,7 @@ body.gutter-dragging .video-tile { pointer-events: none; }
 .upload-progress-fill { width: 0; height: 100%; background: var(--role-brand); transition: width .1s linear; }
 
 .chat-input-bar {
-    display: flex; align-items: center; gap: var(--s-2);
+    display: flex; align-items: flex-end; gap: var(--s-2);
     width: 100%;
     padding: var(--s-2);
     padding-bottom: calc(var(--s-2) + var(--safe-bottom));
@@ -1045,7 +1072,89 @@ body.gutter-dragging .video-tile { pointer-events: none; }
     flex-shrink: 0;
 }
 .chat-drawer.keyboard-open .chat-input-bar { padding-bottom: var(--s-2); }
-.chat-input-bar input[type="text"] { flex: 1; min-width: 0; margin: 0; }
+/* Grows with the message up to INPUT_MAX_HEIGHT in chat.js, then scrolls */
+#chatInput {
+    flex: 1; min-width: 0; margin: 0;
+    height: var(--tap); min-height: var(--tap); max-height: 160px;
+    padding: 10px 12px;
+    font: var(--fs-body)/1.25 var(--font-ui);    /* ≥16px: no iOS zoom on focus */
+    color: var(--text-1);
+    background: var(--surface-2);
+    border: var(--stroke) solid var(--line-strong);
+    border-radius: 0;
+    outline: none;
+    resize: none;
+    overflow-y: auto;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color var(--t-fast) var(--ease-out);
+}
+#chatInput::placeholder { color: var(--text-3); opacity: 1; }
+#chatInput:hover { border-color: var(--role-info); }
+#chatInput:focus-visible { border-color: var(--role-info); outline: 2px solid var(--role-info); outline-offset: 2px; }
+
+/* --- polls --- */
+.poll-card {
+    display: flex; flex-direction: column; gap: var(--s-2);
+    width: 100%;
+    padding: var(--s-3);
+    background: var(--surface-2);
+    border: var(--stroke) solid var(--role-info);
+}
+.poll-card .bubble-meta { margin: 0; }
+.poll-chip {
+    flex-shrink: 0;
+    padding: 0 6px;
+    font: var(--fs-small)/1.5 var(--font-mono);
+    color: var(--ink);
+    background: var(--role-info);
+}
+.poll-chip.closed { color: var(--text-2); background: transparent; border: 1px solid var(--line-strong); }
+.poll-question { margin: 0; font-size: var(--fs-body); font-weight: 700; line-height: var(--lh-tight); color: var(--text-1); overflow-wrap: anywhere; }
+.poll-hint { margin: 0; font: var(--fs-small)/var(--lh-tight) var(--font-mono); color: var(--text-3); }
+.poll-options { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
+.poll-option {
+    position: relative;
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--s-2);
+    width: 100%;
+    min-height: var(--tap);
+    padding: var(--s-2) var(--s-3) calc(var(--s-2) + 4px);
+    font-size: var(--fs-small);
+    text-align: left;
+    color: var(--text-1);
+    background: var(--surface-1);
+    border: var(--stroke) solid var(--line-strong);
+    cursor: pointer;
+    transition: border-color var(--t-fast) var(--ease-out), background-color var(--t-fast) var(--ease-out);
+}
+.poll-option:hover:not(:disabled) { border-color: var(--role-info); background: var(--surface-3); }
+.poll-option:focus-visible { outline: 2px solid var(--role-info); outline-offset: 2px; }
+.poll-option:disabled { cursor: default; }
+.poll-option.picked { border-color: var(--role-brand); }   /* magenta is you */
+.poll-mark { width: 14px; height: 14px; border: var(--stroke) solid var(--line-strong); }
+.poll-option.picked .poll-mark { background: var(--role-brand); border-color: var(--role-brand); box-shadow: inset 0 0 0 2px var(--surface-1); }
+.poll-text { overflow-wrap: anywhere; }
+.poll-count { font-family: var(--font-mono); color: var(--text-2); }
+.poll-bar {
+    position: absolute; left: 0; bottom: 0;
+    width: var(--share); height: 4px;
+    background: var(--role-info);
+    transition: width var(--t-base) var(--ease-out);
+}
+.poll-option.picked .poll-bar { background: var(--role-brand); }
+.poll-names { display: block; margin-top: 2px; padding-left: var(--s-3); font-size: var(--fs-small); color: var(--text-3); overflow-wrap: anywhere; }
+.poll-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.poll-actions .secondary-btn:disabled { opacity: .5; cursor: default; box-shadow: none; }
+.poll-end { color: var(--text-2); border-color: var(--line-strong); }
+
+.poll-options-field { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.poll-options-field legend { margin-bottom: var(--s-1); padding: 0; font-size: var(--fs-small); font-weight: 600; color: var(--text-2); }
+.poll-option-list { display: flex; flex-direction: column; gap: var(--s-2); }
+.poll-option-row { display: flex; gap: var(--s-1); align-items: center; }
+.poll-option-row input { flex: 1; min-width: 0; }
+.poll-add { align-self: flex-start; }
+.poll-settings { display: flex; flex-direction: column; gap: var(--s-1); }
+@media (prefers-reduced-motion: reduce) { .poll-bar { transition: none; } }
 
 .chat-badge {
     display: none;

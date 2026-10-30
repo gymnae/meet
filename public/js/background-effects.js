@@ -76,10 +76,15 @@ const SCREEN_BACKDROP_FPS = 15;
 export function getBackgroundChoice() {
     try {
         const id = localStorage.getItem(STORAGE_KEY);
-        return BACKGROUNDS.some(b => b.id === id) || id?.startsWith(CUSTOM_PREFIX) ? id : 'none';
-    } catch (e) {
-        return 'none';
-    }
+        if (BACKGROUNDS.some(b => b.id === id) || id?.startsWith(CUSTOM_PREFIX)) return id;
+    } catch (e) {}
+    return defaultBackground();
+}
+
+// Blur until people pick something else, on devices that can run it; elsewhere a default blur
+// would only keep the camera off.
+function defaultBackground() {
+    return canProcessVideo() ? 'blur' : 'none';
 }
 
 function currentTheme() {

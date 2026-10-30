@@ -46,7 +46,9 @@ export const AppState = {
     roomName: '',
     roomPassword: '',
     audienceId: null,
-    audienceMode: false
+    audienceMode: false,
+    // Chat and files vanish after 1 / 10 minutes; otherwise they stay until everyone has left
+    chatDisappearing: false
 };
 
 export const videoCaptureProfile = {

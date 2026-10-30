@@ -17,7 +17,7 @@ The browser client is built with vanilla JavaScript and CSS; a small Node.js ser
 - Background blur and backgrounds, picked under Cam: pixel art in the Pixel theme, calm smooth backdrops in Prism, your own pictures, animated pictures (GIF, WebP, PNG; animated where the browser has ImageDecoder, else the first frame) and short videos (MP4, WebM, MOV, up to 25 MB), and Streamer: while you share, your screen with you cut out small in the corner, sent as one picture in place of camera and screen, so others see it laid out large like any shared screen. Your own files stay in the browser (IndexedDB), filed under the name you join with, and never reach the server. Edges come from MediaPipe's soft confidence mask, smoothed over a few masks and feathered, and the blur leaves the person out so no halo forms. Uses the platform's own blur where the browser offers it (Chrome on Windows with Studio Effects, ChromeOS, iOS Portrait mode when it is on); otherwise MediaPipe's selfie segmenter on the GPU via LiveKit's track processors, masking every frame and stepping down (fewer masks, lower camera resolution) when the device falls behind. Phones, Safari and Firefox start at the lightest setting (360p, 24 fps). Offered only on devices with WebGL2 and at least 4 cores and 4 GB where reported. If an effect can't start, the camera stays off rather than showing the background
 - Reactions, raised hands, active-speaker feedback, and sound-processing controls
 - Opt-in self-monitoring ("Hear yourself" in the sound panel): your mic is played back locally, straight from the browser's audio graph, so there's no network delay. Meant for wired headphones; echo cancellation is off while it's on
-- Ephemeral chat (1 minute) and file sharing up to 200 MB (10 minutes)
+- Chat with formatting kept when pasting, quick polls (single or multiple choice), and file sharing up to 200 MB; all of it is removed once everyone has left the room, or after 1 minute (chat) and 10 minutes (files) with disappearing messages on
 - Pixel and Prism visual themes
 - Status page with active-room and usage statistics
 - Automatic removal of inactive room records after 7 days
@@ -83,7 +83,7 @@ The container runs as UID/GID `10001`; ensure the mounted data directory is writ
 
 ## Data lifetime
 
-Chat messages are retained for about 1 minute, shared files for about 10 minutes, and inactive room records for 7 days. An audience link stops working when its room record is removed. SQLite data and uploads live under `DATA_DIR`; media streams are routed through LiveKit.
+Chat messages, shared files and polls are kept while anyone is in the room and removed about 2 minutes after the last person leaves (at most 24 hours in any case). With disappearing messages turned on for a room, chat goes after about 1 minute and files after about 10. Inactive room records are kept for 7 days. An audience link stops working when its room record is removed. SQLite data and uploads live under `DATA_DIR`; media streams are routed through LiveKit.
 
 ## Acknowledgement
 
