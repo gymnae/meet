@@ -2,95 +2,57 @@
   <img src="public/schnackn-wordmark.svg" width="504" alt="schnackn.">
 </p>
 
-A lightweight, self-hosted video meeting app for joining a room without an account or installation. The idea is simple: open a link, enter a name, and talk—while keeping the interface playful, responsive, and resilient across devices.
+**Open a link. Type a name. Talk.** No account, no install, no nonsense. A self-hosted video room built with vanilla JS and a small Node server, on top of LiveKit.
 
-The browser client is built with vanilla JavaScript and CSS; a small Node.js service handles room access, short-lived collaboration data, and LiveKit tokens.
+## What it does
 
-## Features
+- **Instant rooms** with optional passwords, invite links and QR codes
+- **Audience links** for talks: listen-only, invisible to the room, room name hidden. On phones it keeps the screen awake and reconnects by itself
+- **Backgrounds that look good:** soft-edged blur with no halo, pixel-art and smooth backdrops, your own photos, GIFs and videos. Uses the platform's own blur where there is one, otherwise GPU segmentation that steps down on slower devices. On by default
+- **Streamer mode:** your screen with you cut out in the corner, sent as one picture
+- **Chat that keeps formatting** pasted from Docs, Word or code editors, plus **quick polls** and file sharing up to 200 MB
+- **Gone when you're gone:** chat, files and polls are deleted once everyone has left. Disappearing messages are one click away
+- Screen sharing, local recording, reactions, raised hands, sound controls and "Hear yourself" monitoring
+- Two themes, **Pixel** and **Prism**, both mobile-first
+- **Works on locked-down networks:** the LiveKit client is self-hosted, so no CDN is needed, and failed joins say exactly what was blocked
 
-- Instant rooms via shareable links, with optional password protection
-- Invite dialog with copyable links and QR codes; a protected room's link carries its password
-- Audience links for talks: a listen-only view behind a link that hides the room name and needs no password. Listeners have no mic, camera, chat or sharing, stay invisible to the room, and can pass the link on by QR code. On phones the listener view keeps the screen awake, shows lock-screen controls and reconnects by itself
-- Video and audio calls powered by LiveKit, including device selection and graceful audio-only/listen-only fallbacks
-- Responsive participant grids, screen-sharing layouts, resizable picture-in-picture, and fullscreen mode
-- Screen sharing and local browser recording
-- Background blur and backgrounds, picked under Cam: pixel art in the Pixel theme, calm smooth backdrops in Prism, your own pictures, animated pictures (GIF, WebP, PNG; animated where the browser has ImageDecoder, else the first frame) and short videos (MP4, WebM, MOV, up to 25 MB), and Streamer: while you share, your screen with you cut out small in the corner, sent as one picture in place of camera and screen, so others see it laid out large like any shared screen. Your own files stay in the browser (IndexedDB), filed under the name you join with, and never reach the server. Edges come from MediaPipe's soft confidence mask, smoothed over a few masks and feathered, and the blur leaves the person out so no halo forms. Uses the platform's own blur where the browser offers it (Chrome on Windows with Studio Effects, ChromeOS, iOS Portrait mode when it is on); otherwise MediaPipe's selfie segmenter on the GPU via LiveKit's track processors, masking every frame and stepping down (fewer masks, lower camera resolution) when the device falls behind. Phones, Safari and Firefox start at the lightest setting (360p, 24 fps). Offered only on devices with WebGL2 and at least 4 cores and 4 GB where reported. If an effect can't start, the camera stays off rather than showing the background
-- Reactions, raised hands, active-speaker feedback, and sound-processing controls
-- Opt-in self-monitoring ("Hear yourself" in the sound panel): your mic is played back locally, straight from the browser's audio graph, so there's no network delay. Meant for wired headphones; echo cancellation is off while it's on
-- Chat with formatting kept when pasting, quick polls (single or multiple choice), and file sharing up to 200 MB; all of it is removed once everyone has left the room, or after 1 minute (chat) and 10 minutes (files) with disappearing messages on
-- Pixel and Prism visual themes
-- Status page with active-room and usage statistics
-- Automatic removal of inactive room records after 7 days
+## Run it
 
-## Deployment requirements
-
-- A reachable [LiveKit](https://livekit.io/) deployment and API credentials
-- Node.js 20 or newer for direct deployment, or Docker
-- A writable persistent data directory for SQLite and temporary uploads
-- HTTPS for the web app and WSS for LiveKit in production; browsers require a secure context for camera, microphone, and screen access
-
-LiveKit's secure WebSocket (WSS) signaling connection is mandatory even when all media is relayed through TURN. TURN is a media-connectivity fallback and does not replace signaling. Corporate firewalls and proxies must therefore allow outbound WSS/HTTPS to the configured LiveKit host as well as the deployment's required WebRTC/TURN ports.
-
-For restrictive networks, serve LiveKit signalling as `wss://` on port 443 behind your reverse proxy, and enable TURN over TLS on port 443 (LiveKit's `turn.tls_port`). Clients built on MatrixRTC (Element Call) use the same LiveKit client and WebSocket signalling. If they work on a network where this app doesn't, compare their LiveKit URL with `LIVEKIT_URL` here. The LiveKit browser library is served by this app (from the `livekit-client` npm package), so no public CDN has to be reachable. When joining fails, the join screen says which step failed: the server can't be reached at all, its WebSocket is blocked, or signalling worked but audio and video couldn't get through. It also names the host, so the message can go to an IT department as is.
-
-Configuration is provided through environment variables:
+You need a [LiveKit](https://livekit.io/) server, plus Node.js 20+ or Docker.
 
 ```env
-PORT=3000
 LIVEKIT_URL=wss://livekit.example.com
 LIVEKIT_API_KEY=your_api_key
 LIVEKIT_API_SECRET=your_api_secret
-LIVEKIT_HTTP_URL=https://livekit.example.com
+LIVEKIT_HTTP_URL=https://livekit.example.com   # optional, derived from LIVEKIT_URL
+PORT=3000
 DATA_DIR=./data
 ```
 
-`LIVEKIT_HTTP_URL` is optional when it can be derived from `LIVEKIT_URL`. Development defaults exist for local LiveKit, but explicit credentials should always be used in production.
-
-## Run locally
-
-With LiveKit available and the environment variables exported or supplied by your process manager:
-
 ```bash
-npm install
-npm start
+npm install && npm start        # or: npm run dev
 ```
-
-For automatic server restarts during development:
-
-```bash
-npm run dev
-```
-
-The app listens on `http://localhost:3000` by default.
-
-## Run with Docker
 
 ```bash
 docker build -t schnackn .
-docker run -d \
-  --name schnackn \
-  --restart unless-stopped \
-  -p 3000:3000 \
+docker run -d --name schnackn --restart unless-stopped -p 3000:3000 \
   -e LIVEKIT_URL="wss://livekit.example.com" \
-  -e LIVEKIT_API_KEY="your_api_key" \
-  -e LIVEKIT_API_SECRET="your_api_secret" \
-  -e DATA_DIR=/app/data \
-  -v "$(pwd)/data:/app/data" \
-  schnackn
+  -e LIVEKIT_API_KEY="your_api_key" -e LIVEKIT_API_SECRET="your_api_secret" \
+  -e DATA_DIR=/app/data -v "$(pwd)/data:/app/data" schnackn
 ```
 
-The container runs as UID/GID `10001`; ensure the mounted data directory is writable by that user. Put the service behind an HTTPS reverse proxy for production use.
+The container runs as UID/GID `10001`, so the data directory must be writable by that user.
 
-## Data lifetime
+In production, serve the app over HTTPS and LiveKit over WSS: browsers only allow camera and mic access on secure pages. For strict corporate networks, put LiveKit signalling on `wss://` port 443 and enable TURN over TLS on 443 (`turn.tls_port`). TURN does not replace the WSS signalling connection.
 
-Chat messages, shared files and polls are kept while anyone is in the room and removed about 2 minutes after the last person leaves (at most 24 hours in any case). With disappearing messages turned on for a room, chat goes after about 1 minute and files after about 10. Inactive room records are kept for 7 days. An audience link stops working when its room record is removed. SQLite data and uploads live under `DATA_DIR`; media streams are routed through LiveKit.
+## Data
+
+Chat, files and polls are removed about 2 minutes after the room empties, and after 24 hours at the latest. With disappearing messages on, chat goes after 1 minute and files after 10. Room records expire after 7 days of inactivity. Everything lives in SQLite under `DATA_DIR`. Your own background pictures never leave your browser.
 
 ## Acknowledgement
 
-This project was created with the assistance of multiple large language models (LLMs), used across design, implementation, review, and documentation.
+Built with the help of several large language models, across design, code, review and docs.
 
 ## License
 
-See [LICENSE](LICENSE).
-
-`public/models/selfie_segmenter*.tflite` are Google's MediaPipe selfie segmentation models, licensed under Apache 2.0.
+See [LICENSE](LICENSE). `public/models/selfie_segmenter*.tflite` are Google's MediaPipe models (Apache 2.0).
