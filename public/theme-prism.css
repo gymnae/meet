@@ -423,7 +423,30 @@ body.in-session .prism-beam, body.in-session .prism-fan { display: none; }
 [data-theme="prism"] .chat-send-btn { color: var(--ink); background: var(--light); border-color: var(--light); }
 [data-theme="prism"] .chat-send-btn:hover { background: #fff; }
 [data-theme="prism"] .chat-input-bar { background: transparent; border-top: 1px solid var(--line); }
-[data-theme="prism"] .chat-input-bar input[type="text"] { border-radius: var(--r-pill); padding-inline: 16px; }
+[data-theme="prism"] #chatInput {
+    padding-inline: 16px;
+    background: rgb(255 255 255 / .05);
+    border: 1px solid var(--line-strong);
+    border-radius: 22px;
+}
+[data-theme="prism"] #chatInput:hover { border-color: rgb(255 255 255 / .55); }
+[data-theme="prism"] #chatInput:focus-visible { border-color: var(--text-1); background: rgb(255 255 255 / .08); outline: 2px solid rgb(255 255 255 / .5); outline-offset: 2px; }
+[data-theme="prism"] .chat-ttl-btn { border-radius: var(--r-pill); }
+[data-theme="prism"] .chat-ttl-btn[aria-pressed="true"] { color: var(--ink); background: var(--light); }
+[data-theme="prism"] :is(.chat-inline-code, .chat-code) { background: rgb(0 0 0 / .3); border-radius: var(--r-s); }
+[data-theme="prism"] .chat-inline-code { border: 0; }
+[data-theme="prism"] :is(.chat-code, .chat-quote) { border-left-color: rgb(255 255 255 / .3); }
+
+[data-theme="prism"] .poll-card { background: rgb(255 255 255 / .06); border: 1px solid var(--line); border-radius: 16px; }
+[data-theme="prism"] .poll-chip { color: var(--ink); background: var(--light); border-radius: var(--r-pill); padding: 0 8px; }
+[data-theme="prism"] .poll-chip.closed { color: var(--text-3); background: transparent; border: 0; }
+[data-theme="prism"] .poll-option { overflow: hidden; background: rgb(255 255 255 / .04); border: 1px solid var(--line); border-radius: var(--r-m); }
+[data-theme="prism"] .poll-option:hover:not(:disabled) { background: rgb(255 255 255 / .08); border-color: rgb(255 255 255 / .55); }
+[data-theme="prism"] .poll-option.picked { border-color: var(--text-1); }
+[data-theme="prism"] .poll-mark { border: 1px solid var(--line-strong); border-radius: 50%; }
+[data-theme="prism"] .poll-option.picked .poll-mark { background: var(--light); border-color: var(--light); box-shadow: inset 0 0 0 3px #1d1f2b; }
+[data-theme="prism"] .poll-bar { background: rgb(255 255 255 / .45); }
+[data-theme="prism"] .poll-option.picked .poll-bar { background: var(--light); }
 
 /* conversation shape: yours on the right, others on the left */
 [data-theme="prism"] .chat-stream { gap: var(--s-2); }

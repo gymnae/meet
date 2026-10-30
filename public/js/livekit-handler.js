@@ -1,7 +1,8 @@
 import { AppState, videoCaptureProfile, getResolutionProfile } from './state.js';
 import { normalizeOutgoingMicTrack, getOutgoingSourceTrack, releaseOutgoingForPublished, teardownAllNormalization, getMicConstraints, setMicMonitorMuted, setPreferredMicDeviceId } from './audio-normalizer.js';
 import { recalculateLayout, applyDynamicMirrorEffect, triggerFloatingEmoji, updateHandBadge, showToast, setDockLabel, hueIndexFor } from './ui.js';
-import { renderMessage, renderFile } from './chat.js';
+import { renderMessage, renderFile, setDisappearing } from './chat.js';
+import { handlePollUpdate } from './polls.js';
 import { applyBackground, buildBackgroundPicker, streamerOutput, onStreamerChange } from './background-effects.js';
 
 export function ensureParticipantTile(participant, streamSource = 'camera') {
@@ -195,6 +196,10 @@ export function handleIncomingDataPacket(payload, participant) {
             document.getElementById(`msg_${data.id}`)?.remove();
         } else if (data.type === 'FILE_SHARED') {
             renderFile(data.payload, false);
+        } else if (data.type === 'POLL_UPDATE') {
+            handlePollUpdate(data.poll);
+        } else if (data.type === 'ROOM_SETTINGS') {
+            if (typeof data.disappearing === 'boolean') setDisappearing(data.disappearing, participant?.name || 'Someone');
         }
     } catch (e) {
         console.error("[DataChannel] Packet parse error:", e);

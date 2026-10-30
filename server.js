@@ -88,6 +88,37 @@ if (!db.prepare('PRAGMA table_info(rooms)').all().some(c => c.name === 'audience
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS rooms_audience_id ON rooms (audience_id)');
 
+// Disappearing chat (the 1 min / 10 min timers) became opt-in per room; by default chat, files
+// and polls stay until everyone has left. Added after release, like audience_id.
+if (!db.prepare('PRAGMA table_info(rooms)').all().some(c => c.name === 'disappearing')) {
+    db.exec('ALTER TABLE rooms ADD COLUMN disappearing INTEGER NOT NULL DEFAULT 0');
+}
+
+// Polls in the chat. Votes are keyed by the name people joined with, like everything else in a
+// room; names are not verified. version counts votes, so clients keep the newest tally.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS polls (
+        id TEXT PRIMARY KEY,
+        room_name TEXT,
+        creator TEXT,
+        question TEXT,
+        options TEXT,
+        multi INTEGER,
+        show_names INTEGER,
+        closed INTEGER DEFAULT 0,
+        version INTEGER DEFAULT 0,
+        created_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS poll_votes (
+        poll_id TEXT,
+        voter TEXT,
+        choices TEXT,
+        created_at INTEGER,
+        PRIMARY KEY (poll_id, voter)
+    );
+`);
+
 // Multer 200MB file limit
 const upload = multer({
     dest: uploadDir,
@@ -165,6 +196,57 @@ function hashPassword(pass) {
 
 function cleanRoomName(name) {
     return String(name || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+}
+
+// Disappearing rooms: chat lasts 1 minute, files 10 minutes.
+const CHAT_TTL_MS = 60 * 1000;
+const FILE_TTL_MS = 10 * 60 * 1000;
+// Everything else is kept while anyone is in the room and removed once it has been empty this
+// long. The grace covers reloads and reconnects, and LiveKit reporting a leave late.
+const EMPTY_GRACE_MS = 2 * 60 * 1000;
+// Backstop for a room that never empties (or whose emptiness LiveKit can't tell us)
+const MAX_KEEP_MS = 24 * 60 * 60 * 1000;
+
+function isDisappearing(roomName) {
+    return !!db.prepare('SELECT disappearing FROM rooms WHERE name = ?').get(roomName)?.disappearing;
+}
+
+const MAX_MESSAGE_CHARS = 4000;
+const POLL_MAX_OPTIONS = 10;
+const POLL_MAX_TEXT = 200;
+
+// A poll as clients see it. Voter names only when the creator chose to show them; everyone gets
+// their own choices back so they can see and change their vote.
+function pollView(poll, viewer) {
+    const options = JSON.parse(poll.options);
+    const votes = db.prepare('SELECT voter, choices FROM poll_votes WHERE poll_id = ? ORDER BY created_at ASC').all(poll.id);
+    const counts = options.map(() => 0);
+    const names = options.map(() => []);
+    let mine = null;
+    for (const v of votes) {
+        const choices = JSON.parse(v.choices);
+        for (const i of choices) {
+            counts[i]++;
+            names[i].push(v.voter);
+        }
+        if (viewer && v.voter === viewer) mine = choices;
+    }
+    return {
+        id: poll.id,
+        room_name: poll.room_name,
+        creator: poll.creator,
+        question: poll.question,
+        options,
+        multi: !!poll.multi,
+        show_names: !!poll.show_names,
+        closed: !!poll.closed,
+        version: poll.version,
+        created_at: poll.created_at,
+        voters: votes.length,
+        counts,
+        names: poll.show_names ? names : null,
+        mine
+    };
 }
 
 // Audience members join hidden and listen-only: they cannot publish media or data,
@@ -269,7 +351,7 @@ app.post('/api/token', async (req, res) => {
 
         // Tells the client whether a password belongs in the links it shares.
         const isProtected = !!(existingRoom ? existingRoom.password_hash : password);
-        res.json({ token: jwtToken, serverUrl: LIVEKIT_URL, protected: isProtected });
+        res.json({ token: jwtToken, serverUrl: LIVEKIT_URL, protected: isProtected, disappearing: isDisappearing(cleanRoom) });
     } catch (err) {
         console.error('[Token Generation Error]', err);
         res.status(500).json({ error: 'Failed to generate connection token' });
@@ -296,23 +378,118 @@ app.post('/api/rooms/:roomName/audience-link', (req, res) => {
     res.json({ audienceId });
 });
 
-// Ephemeral room sync (chat messages <60s, files <10m)
+// Room sync for people who join: the chat, files and polls still there
 app.get('/api/rooms/:roomName/sync', (req, res) => {
-    const roomName = req.params.roomName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+    const roomName = cleanRoomName(req.params.roomName);
     const now = Date.now();
+    const disappearing = isDisappearing(roomName);
+    const chatSince = disappearing ? now - CHAT_TTL_MS : 0;
+    const filesSince = disappearing ? now - FILE_TTL_MS : 0;
 
-    const messages = db.prepare('SELECT id, room_name, sender, text, created_at FROM messages WHERE room_name = ? AND created_at >= ? ORDER BY created_at ASC').all(roomName, now - 60 * 1000);
-    const files = db.prepare('SELECT id, room_name, sender, original_name, size, created_at FROM files WHERE room_name = ? AND created_at >= ? ORDER BY created_at ASC').all(roomName, now - 10 * 60 * 1000);
+    const messages = db.prepare('SELECT id, room_name, sender, text, created_at FROM messages WHERE room_name = ? AND created_at >= ? ORDER BY created_at ASC').all(roomName, chatSince);
+    const files = db.prepare('SELECT id, room_name, sender, original_name, size, created_at FROM files WHERE room_name = ? AND created_at >= ? ORDER BY created_at ASC').all(roomName, filesSince);
+    const viewer = String(req.query.viewer || '');
+    const polls = db.prepare('SELECT * FROM polls WHERE room_name = ? ORDER BY created_at ASC').all(roomName).map(p => pollView(p, viewer));
 
-    res.json({ messages, files });
+    res.json({ messages, files, polls, disappearing });
 });
 
-// Save ephemeral message (1-minute TTL)
+// Turns disappearing chat on or off for the room. Same check as joining.
+app.post('/api/rooms/:roomName/settings', (req, res) => {
+    const roomName = cleanRoomName(req.params.roomName);
+    const room = db.prepare('SELECT * FROM rooms WHERE name = ?').get(roomName);
+    if (!room) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+    if (room.password_hash && hashPassword(String(req.body?.password || '')) !== room.password_hash) {
+        return res.status(401).json({ error: 'Incorrect Password' });
+    }
+    if (typeof req.body?.disappearing !== 'boolean') {
+        return res.status(400).json({ error: 'disappearing must be true or false' });
+    }
+    db.prepare('UPDATE rooms SET disappearing = ?, updated_at = ? WHERE name = ?').run(req.body.disappearing ? 1 : 0, Date.now(), roomName);
+    res.json({ disappearing: req.body.disappearing });
+});
+
+// Starts a poll: a question, 2 to 10 options, single or multiple choice, with or without names
+app.post('/api/rooms/:roomName/polls', (req, res) => {
+    const roomName = cleanRoomName(req.params.roomName);
+    const { creator, question, options, multi, showNames } = req.body || {};
+    const cleanQuestion = String(question || '').trim().slice(0, POLL_MAX_TEXT);
+    const cleanOptions = Array.isArray(options)
+        ? options.map(o => String(o || '').trim().slice(0, POLL_MAX_TEXT)).filter(Boolean)
+        : [];
+    if (!cleanQuestion || cleanOptions.length < 2 || cleanOptions.length > POLL_MAX_OPTIONS) {
+        return res.status(400).json({ error: `A question and 2 to ${POLL_MAX_OPTIONS} options are required` });
+    }
+
+    const poll = {
+        id: crypto.randomUUID(),
+        room_name: roomName,
+        creator: String(creator || 'Attendee'),
+        question: cleanQuestion,
+        options: JSON.stringify(cleanOptions),
+        multi: multi ? 1 : 0,
+        show_names: showNames === false ? 0 : 1,
+        closed: 0,
+        version: 0,
+        created_at: Date.now()
+    };
+    db.prepare('INSERT INTO polls (id, room_name, creator, question, options, multi, show_names, closed, version, created_at) VALUES (@id, @room_name, @creator, @question, @options, @multi, @show_names, @closed, @version, @created_at)').run(poll);
+    res.json(pollView(poll, poll.creator));
+});
+
+// Votes, or changes a vote. An empty choice list takes the vote back.
+app.post('/api/polls/:pollId/vote', (req, res) => {
+    const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(req.params.pollId);
+    if (!poll) {
+        return res.status(404).json({ error: 'Poll not found' });
+    }
+    if (poll.closed) {
+        return res.status(409).json({ error: 'Poll is closed' });
+    }
+    const voter = String(req.body?.voter || '').trim();
+    const count = JSON.parse(poll.options).length;
+    const choices = Array.isArray(req.body?.choices)
+        ? [...new Set(req.body.choices.map(Number))].filter(i => Number.isInteger(i) && i >= 0 && i < count).sort((a, b) => a - b)
+        : [];
+    if (!voter || (!poll.multi && choices.length > 1)) {
+        return res.status(400).json({ error: 'A name and a valid choice are required' });
+    }
+
+    db.transaction(() => {
+        if (choices.length) {
+            db.prepare('INSERT INTO poll_votes (poll_id, voter, choices, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (poll_id, voter) DO UPDATE SET choices = excluded.choices').run(poll.id, voter, JSON.stringify(choices), Date.now());
+        } else {
+            db.prepare('DELETE FROM poll_votes WHERE poll_id = ? AND voter = ?').run(poll.id, voter);
+        }
+        db.prepare('UPDATE polls SET version = version + 1 WHERE id = ?').run(poll.id);
+    })();
+    res.json(pollView(db.prepare('SELECT * FROM polls WHERE id = ?').get(poll.id), voter));
+});
+
+// Ends a poll; only the person who started it (by name)
+app.post('/api/polls/:pollId/close', (req, res) => {
+    const poll = db.prepare('SELECT * FROM polls WHERE id = ?').get(req.params.pollId);
+    if (!poll) {
+        return res.status(404).json({ error: 'Poll not found' });
+    }
+    if (String(req.body?.creator || '') !== poll.creator) {
+        return res.status(403).json({ error: 'Only the person who started the poll can close it' });
+    }
+    db.prepare('UPDATE polls SET closed = 1, version = version + 1 WHERE id = ?').run(poll.id);
+    res.json(pollView(db.prepare('SELECT * FROM polls WHERE id = ?').get(poll.id), poll.creator));
+});
+
+// Save a chat message
 app.post('/api/rooms/:roomName/chat', (req, res) => {
     const roomName = req.params.roomName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
-    const { sender, text } = req.body;
+    const { sender } = req.body;
+    // Leading spaces stay (pasted code); blank lines around the message go. Capped so the
+    // message still fits in one reliable LiveKit data packet.
+    const text = String(req.body.text || '').replace(/^\s*\n|\s+$/g, '').slice(0, MAX_MESSAGE_CHARS);
 
-    if (!text || !text.trim()) {
+    if (!text.trim()) {
         return res.status(400).json({ error: 'Message text required' });
     }
 
@@ -323,14 +500,14 @@ app.post('/api/rooms/:roomName/chat', (req, res) => {
         id,
         roomName,
         sender || 'Attendee',
-        text.trim(),
+        text,
         now
     );
 
-    res.json({ id, room_name: roomName, sender: sender || 'Attendee', text: text.trim(), created_at: now });
+    res.json({ id, room_name: roomName, sender: sender || 'Attendee', text, created_at: now });
 });
 
-// Upload ephemeral file (200MB limit, 10-minute TTL)
+// Upload a file (200MB limit)
 app.post('/api/rooms/:roomName/upload', (req, res) => {
     upload.single('file')(req, res, (err) => {
         if (err instanceof multer.MulterError) {
@@ -387,25 +564,84 @@ app.get('/api/files/:fileId', (req, res) => {
     res.download(filePath, file.original_name);
 });
 
-// Background Auto-Purge Worker (Every 10 seconds)
-setInterval(() => {
-    const now = Date.now();
-
-    // 1. Purge chat older than 60 seconds
-    db.prepare('DELETE FROM messages WHERE created_at < ?').run(now - 60 * 1000);
-
-    // 2. Purge files older than 10 minutes (600 seconds)
-    const expiredFiles = db.prepare('SELECT id, stored_filename FROM files WHERE created_at < ?').all(now - 10 * 60 * 1000);
-    for (const f of expiredFiles) {
+function deleteFiles(rows) {
+    for (const f of rows) {
         const p = path.join(uploadDir, f.stored_filename);
         if (fs.existsSync(p)) {
             try { fs.unlinkSync(p); } catch (e) {}
         }
     }
-    db.prepare('DELETE FROM files WHERE created_at < ?').run(now - 10 * 60 * 1000);
+}
 
-    // 3. Purge inactive rooms older than 7 days
-    db.prepare('DELETE FROM rooms WHERE updated_at < ?').run(now - 7 * 24 * 60 * 60 * 1000);
+// Chat, files and polls of a room, all at once
+function purgeRoomContent(roomName) {
+    deleteFiles(db.prepare('SELECT stored_filename FROM files WHERE room_name = ?').all(roomName));
+    db.transaction(() => {
+        db.prepare('DELETE FROM messages WHERE room_name = ?').run(roomName);
+        db.prepare('DELETE FROM files WHERE room_name = ?').run(roomName);
+        db.prepare('DELETE FROM poll_votes WHERE poll_id IN (SELECT id FROM polls WHERE room_name = ?)').run(roomName);
+        db.prepare('DELETE FROM polls WHERE room_name = ?').run(roomName);
+    })();
+}
+
+// Rooms with content that LiveKit last saw empty, and since when
+const emptySince = new Map();
+let purgeRunning = false;
+
+// Background purge worker (every 10 seconds)
+setInterval(async () => {
+    if (purgeRunning) return;
+    purgeRunning = true;
+    try {
+        const now = Date.now();
+
+        // 1. Disappearing rooms: chat after 1 minute, files after 10 minutes
+        db.prepare('DELETE FROM messages WHERE created_at < ? AND room_name IN (SELECT name FROM rooms WHERE disappearing = 1)').run(now - CHAT_TTL_MS);
+        const fileTtlQuery = 'FROM files WHERE created_at < ? AND room_name IN (SELECT name FROM rooms WHERE disappearing = 1)';
+        deleteFiles(db.prepare(`SELECT stored_filename ${fileTtlQuery}`).all(now - FILE_TTL_MS));
+        db.prepare(`DELETE ${fileTtlQuery}`).run(now - FILE_TTL_MS);
+
+        // 2. Every room: everything goes once nobody has been in it for the grace period.
+        // If LiveKit can't be asked, nothing is removed on that account.
+        const withContent = db.prepare('SELECT room_name FROM messages UNION SELECT room_name FROM files UNION SELECT room_name FROM polls').all().map(r => r.room_name);
+        if (withContent.length) {
+            let occupied = null;
+            try {
+                occupied = new Set((await roomService.listRooms([])).filter(r => r.numParticipants > 0).map(r => r.name));
+            } catch (err) {
+                console.error('[Purge] LiveKit unreachable, keeping room content:', err.message);
+            }
+            if (occupied) {
+                for (const name of withContent) {
+                    if (occupied.has(name)) {
+                        emptySince.delete(name);
+                    } else if (!emptySince.has(name)) {
+                        emptySince.set(name, now);
+                    } else if (now - emptySince.get(name) >= EMPTY_GRACE_MS) {
+                        purgeRoomContent(name);
+                        emptySince.delete(name);
+                    }
+                }
+                for (const name of emptySince.keys()) {
+                    if (!withContent.includes(name)) emptySince.delete(name);
+                }
+            }
+        }
+
+        // 3. Backstop: nothing is kept longer than a day
+        db.prepare('DELETE FROM messages WHERE created_at < ?').run(now - MAX_KEEP_MS);
+        deleteFiles(db.prepare('SELECT stored_filename FROM files WHERE created_at < ?').all(now - MAX_KEEP_MS));
+        db.prepare('DELETE FROM files WHERE created_at < ?').run(now - MAX_KEEP_MS);
+        db.prepare('DELETE FROM poll_votes WHERE poll_id IN (SELECT id FROM polls WHERE created_at < ?)').run(now - MAX_KEEP_MS);
+        db.prepare('DELETE FROM polls WHERE created_at < ?').run(now - MAX_KEEP_MS);
+
+        // 4. Purge inactive rooms older than 7 days
+        db.prepare('DELETE FROM rooms WHERE updated_at < ?').run(now - 7 * 24 * 60 * 60 * 1000);
+    } catch (err) {
+        console.error('[Purge] failed:', err);
+    } finally {
+        purgeRunning = false;
+    }
 }, 10000);
 
 // Status dashboard endpoint
