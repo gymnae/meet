@@ -30,6 +30,8 @@ export const AppState = {
     activeRoom: null,
     preWarmedTracks: [],
     pinnedTileId: null,
+    // Grid tiles made larger by dragging their corner: tile id -> cells per side (2 or 3)
+    tileSpans: new Map(),
     activeScreenShareTileId: null,
     activeSpeakerIdentity: null,
     micMuted: false,
